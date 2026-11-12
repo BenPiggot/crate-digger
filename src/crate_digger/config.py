@@ -27,7 +27,11 @@ class Settings:
     ebay_env: str = "production"  # or "sandbox"
     ebay_marketplace: str = "EBAY_US"
     currency: str = "USD"
-    user_agent: str = "crate-digger/0.1 +https://github.com/your-username/crate-digger"
+    user_agent: str = "crate-digger/0.1 +https://github.com/BenPiggot/crate-digger"
+    discogs_sellers: tuple[str, ...] = ()  # default sellers to search, e.g. favorite record stores
+    cache_dir: str = "~/.cache/crate-digger"
+    inventory_ttl_hours: float = 12
+    max_inventory_pages: int = 100  # 100 listings per page
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -40,4 +44,10 @@ class Settings:
             ebay_marketplace=os.environ.get("EBAY_MARKETPLACE", "EBAY_US"),
             currency=os.environ.get("CURRENCY", "USD"),
             user_agent=os.environ.get("USER_AGENT", cls.user_agent),
+            discogs_sellers=tuple(
+                s.strip() for s in os.environ.get("DISCOGS_SELLERS", "").split(",") if s.strip()
+            ),
+            cache_dir=os.environ.get("CACHE_DIR", cls.cache_dir),
+            inventory_ttl_hours=float(os.environ.get("INVENTORY_TTL_HOURS", cls.inventory_ttl_hours)),
+            max_inventory_pages=int(os.environ.get("MAX_INVENTORY_PAGES", cls.max_inventory_pages)),
         )

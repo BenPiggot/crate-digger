@@ -43,10 +43,24 @@ def create_app(digger: CrateDigger | None = None) -> FastAPI:
     async def releases(q: str = "", catno: str | None = None, barcode: str | None = None):
         return await run(app.state.digger.search_releases(q, catno=catno, barcode=barcode))
 
+    @app.get("/api/config")
+    async def config():
+        d = app.state.digger
+        return {"default_sellers": list(d.settings.discogs_sellers), "ebay_configured": d.ebay.configured}
+
     @app.get("/api/releases/{release_id}/copies")
-    async def copies(release_id: int, max_price: float | None = None, with_details: bool = True):
+    async def copies(
+        release_id: int,
+        sellers: str | None = None,
+        max_price: float | None = None,
+        refresh: bool = False,
+        with_details: bool = True,
+    ):
+        seller_list = [s.strip() for s in sellers.split(",") if s.strip()] if sellers else None
         return await run(
-            app.state.digger.find_copies(release_id, max_price=max_price, with_details=with_details)
+            app.state.digger.find_copies(
+                release_id, sellers=seller_list, max_price=max_price, refresh=refresh, with_details=with_details
+            )
         )
 
     return app

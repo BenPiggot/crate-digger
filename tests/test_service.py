@@ -6,6 +6,7 @@ import respx
 from fastapi.testclient import TestClient
 
 from crate_digger.config import Settings
+from crate_digger.discogs import DiscogsClient
 from crate_digger.service import CrateDigger, catno_in_title, keywords_for
 from crate_digger.models import Release
 from crate_digger.web import create_app
@@ -52,8 +53,13 @@ ITEM_DETAIL = {
 
 
 @pytest.fixture
-def settings():
-    return Settings(discogs_token="t", ebay_client_id="id", ebay_client_secret="secret")
+def settings(tmp_path):
+    return Settings(discogs_token="t", ebay_client_id="id", ebay_client_secret="secret", cache_dir=str(tmp_path))
+
+
+def make(settings: Settings) -> CrateDigger:
+    """CrateDigger with the rate limiter off so tests run fast."""
+    return CrateDigger(settings, discogs=DiscogsClient(settings.discogs_token, "test", min_interval=0))
 
 
 def mock_common(router):
@@ -82,7 +88,7 @@ async def test_find_copies_by_barcode_sorted_and_enriched(settings):
     )
     respx.get(url__regex=rf"{E}/buy/browse/v1/item/.*").respond(json=ITEM_DETAIL)
 
-    digger = CrateDigger(settings)
+    digger = make(settings)
     out = await digger.find_copies(123)
 
     assert search.calls[0].request.url.params["gtin"] == "724385522911"
@@ -109,7 +115,7 @@ async def test_falls_back_to_keywords_and_flags_catno(settings):
         ]})
 
     respx.get(f"{E}/buy/browse/v1/item_summary/search").mock(side_effect=handler)
-    digger = CrateDigger(settings)
+    digger = make(settings)
     out = await digger.find_copies(123, with_details=False)
 
     assert out["matched_by"] == "keywords"
@@ -126,7 +132,7 @@ def test_web_api(settings):
     ]})
     respx.get(f"{E}/buy/browse/v1/item_summary/search").respond(json={"itemSummaries": []})
 
-    with TestClient(create_app(CrateDigger(settings))) as client:
+    with TestClient(create_app(make(settings))) as client:
         assert "crate-digger" in client.get("/").text
         rels = client.get("/api/releases", params={"q": "ok computer"}).json()
         assert rels[0]["release_id"] == 123
@@ -135,7 +141,7 @@ def test_web_api(settings):
 
 
 def test_missing_credentials_give_clear_error():
-    app = create_app(CrateDigger(Settings(discogs_token="", ebay_client_id="", ebay_client_secret="")))
+    app = create_app(make(Settings(discogs_token="", ebay_client_id="", ebay_client_secret="")))
     with TestClient(app) as client:
         r = client.get("/api/releases", params={"q": "x"})
         assert r.status_code == 400 and "DISCOGS_TOKEN" in r.json()["detail"]
@@ -145,8 +151,126 @@ def test_missing_credentials_give_clear_error():
 async def test_works_with_only_discogs_token():
     respx.get(f"{D}/releases/123").respond(json=RELEASE)
     respx.get(f"{D}/marketplace/stats/123").respond(json=STATS)
-    digger = CrateDigger(Settings(discogs_token="t", ebay_client_id="", ebay_client_secret=""))
+    digger = make(Settings(discogs_token="t", ebay_client_id="", ebay_client_secret=""))
     out = await digger.find_copies(123)
     assert out["ebay_configured"] is False
     assert out["discogs_market"]["num_for_sale"] == 42 and out["copies"] == []
     await digger.aclose()
+
+
+# ---------- Discogs seller inventories ----------
+
+def inv_listing(listing_id, release_id, price, cond="Very Good Plus (VG+)", sleeve="Very Good (VG)"):
+    return {
+        "id": listing_id,
+        "price": {"value": price, "currency": "USD"},
+        "condition": cond,
+        "sleeve_condition": sleeve,
+        "ships_from": "United States",
+        "comments": "",
+        "uri": f"https://www.discogs.com/sell/item/{listing_id}",
+        "release": {"id": release_id, "description": "Radiohead - OK Computer (2xLP, Album)"},
+    }
+
+
+def mock_inventory(router, seller="recordstore"):
+    page1 = {"pagination": {"page": 1, "pages": 2}, "listings": [inv_listing(1, 123, 120.0), inv_listing(2, 999, 10.0)]}
+    page2 = {"pagination": {"page": 2, "pages": 2}, "listings": [inv_listing(3, 123, 95.0, "Near Mint (NM or M-)")]}
+
+    def handler(request):
+        return httpx.Response(200, json=page2 if request.url.params["page"] == "2" else page1)
+
+    return router.get(f"{D}/users/{seller}/inventory").mock(side_effect=handler)
+
+
+def mock_listing_details(router):
+    def handler(request):
+        listing_id = int(request.url.path.rsplit("/", 1)[1])
+        price, cond = {1: (120.0, "Very Good Plus (VG+)"), 3: (95.0, "Near Mint (NM or M-)")}[listing_id]
+        detail = inv_listing(listing_id, 123, price, cond)
+        detail["seller"] = {"username": "recordstore", "stats": {"rating": "99.6"}, "shipping": "US Media Mail $5, ships in 2 days"}
+        return httpx.Response(200, json=detail)
+
+    return router.get(url__regex=rf"{D}/marketplace/listings/\d+").mock(side_effect=handler)
+
+
+@respx.mock
+async def test_seller_inventory_finds_exact_pressing_with_shipping_policy(tmp_path):
+    respx.get(f"{D}/releases/123").respond(json=RELEASE)
+    respx.get(f"{D}/marketplace/stats/123").respond(json=STATS)
+    mock_inventory(respx)
+    mock_listing_details(respx)
+    digger = make(Settings(discogs_token="t", ebay_client_id="", ebay_client_secret="", cache_dir=str(tmp_path)))
+
+    out = await digger.find_copies(123, sellers=["recordstore"])
+
+    assert [c["item_id"] for c in out["copies"]] == ["3", "1"]  # other release (999) excluded, cheapest first
+    best = out["copies"][0]
+    assert best["source"] == "discogs" and best["catno_match"] is True
+    assert best["record_grading"] == "Near Mint (NM or M-)" and best["sleeve_grading"] == "Very Good (VG)"
+    assert best["shipping_policy"] == "US Media Mail $5, ships in 2 days"
+    assert best["seller_rating"] == "99.6" and best["ships_from"] == "United States"
+    assert out["sellers_searched"][0]["listings_scanned"] == 3
+    assert out["sellers_searched"][0]["from_cache"] is False
+    await digger.aclose()
+
+
+@respx.mock
+async def test_inventory_is_cached_between_searches(tmp_path):
+    respx.get(f"{D}/releases/123").respond(json=RELEASE)
+    respx.get(f"{D}/marketplace/stats/123").respond(json=STATS)
+    inventory = mock_inventory(respx)
+    settings = Settings(discogs_token="t", ebay_client_id="", ebay_client_secret="", cache_dir=str(tmp_path))
+
+    first = make(settings)
+    await first.find_copies(123, sellers=["recordstore"], with_details=False)
+    assert inventory.call_count == 2  # two pages
+    await first.aclose()
+
+    second = make(settings)  # new process: reads the on-disk cache
+    out = await second.find_copies(123, sellers=["recordstore"], with_details=False)
+    assert inventory.call_count == 2
+    assert out["sellers_searched"][0]["from_cache"] is True and out["count"] == 2
+
+    await second.find_copies(123, sellers=["recordstore"], refresh=True, with_details=False)
+    assert inventory.call_count == 4
+    await second.aclose()
+
+
+@respx.mock
+async def test_unknown_seller_is_reported_not_fatal(tmp_path):
+    respx.get(f"{D}/releases/123").respond(json=RELEASE)
+    respx.get(f"{D}/marketplace/stats/123").respond(json=STATS)
+    respx.get(f"{D}/users/nobody/inventory").respond(404, json={"message": "User does not exist."})
+    mock_inventory(respx)
+    digger = make(Settings(discogs_token="t", ebay_client_id="", ebay_client_secret="", cache_dir=str(tmp_path)))
+
+    out = await digger.find_copies(123, sellers=["nobody", "recordstore"], with_details=False)
+    assert "Not found" in out["sellers_searched"][0]["error"]
+    assert out["count"] == 2
+    await digger.aclose()
+
+
+@respx.mock
+async def test_rate_limit_is_retried():
+    calls = respx.get(f"{D}/releases/123").mock(side_effect=[
+        httpx.Response(429, headers={"Retry-After": "0"}),
+        httpx.Response(200, json=RELEASE),
+    ])
+    client = DiscogsClient("t", "test", min_interval=0)
+    release = await client.get_release(123)
+    assert release.catno == "NODATA 02" and calls.call_count == 2
+    await client.aclose()
+
+
+@respx.mock
+def test_web_passes_sellers_and_exposes_config(tmp_path):
+    respx.get(f"{D}/releases/123").respond(json=RELEASE)
+    respx.get(f"{D}/marketplace/stats/123").respond(json=STATS)
+    mock_inventory(respx, seller="shop_a")
+    settings = Settings(discogs_token="t", ebay_client_id="", ebay_client_secret="",
+                        cache_dir=str(tmp_path), discogs_sellers=("shop_a",))
+    with TestClient(create_app(make(settings))) as client:
+        assert client.get("/api/config").json() == {"default_sellers": ["shop_a"], "ebay_configured": False}
+        out = client.get("/api/releases/123/copies", params={"with_details": "false"}).json()
+        assert out["count"] == 2 and out["sellers_searched"][0]["seller"] == "shop_a"

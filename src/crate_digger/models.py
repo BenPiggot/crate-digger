@@ -58,9 +58,12 @@ class Copy:
     seller_feedback_pct: str | None = None
     buying_options: list[str] = field(default_factory=list)
     returns: str | None = None
+    shipping_policy: str | None = None  # seller's own shipping terms (Discogs)
+    seller_rating: str | None = None
+    comments: str | None = None
     url: str | None = None
     image: str | None = None
-    catno_match: bool = False  # listing title mentions the pressing's catalog number
+    catno_match: bool = False  # exact pressing: Discogs release match, eBay barcode, or catno in title
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
