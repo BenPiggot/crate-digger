@@ -46,6 +46,10 @@ class EbayClient:
         self._token_expires = 0.0
         self._lock = asyncio.Lock()
 
+    @property
+    def configured(self) -> bool:
+        return bool(self._id and self._secret)
+
     async def _access_token(self) -> str:
         """Application token via the OAuth client-credentials grant, cached until expiry."""
         if not (self._id and self._secret):

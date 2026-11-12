@@ -82,6 +82,7 @@ async def find_copies(
     Each copy includes price, shipping cost and type, total, condition, record and
     sleeve grading (when the seller provided it), ships-from country, seller, return
     terms and a link. Exact matches (barcode or catalog number) are listed first.
+    If eBay keys aren't configured, returns only Discogs' totals (ebay_configured=false).
     """
     return await _call(digger().find_copies(
         release_id, max_price=max_price, limit=limit, with_details=with_details

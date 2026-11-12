@@ -33,7 +33,7 @@ pip install -e ".[dev]"
 cp .env.example .env   # then fill in your keys
 ```
 
-You need two free sets of credentials:
+You need two free sets of credentials. A Discogs token alone is enough to start: without eBay keys, crate-digger still finds the pressing and shows Discogs' copies-for-sale count and lowest price.
 
 | Key | Where |
 |---|---|

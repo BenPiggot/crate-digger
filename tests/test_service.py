@@ -139,3 +139,14 @@ def test_missing_credentials_give_clear_error():
     with TestClient(app) as client:
         r = client.get("/api/releases", params={"q": "x"})
         assert r.status_code == 400 and "DISCOGS_TOKEN" in r.json()["detail"]
+
+
+@respx.mock
+async def test_works_with_only_discogs_token():
+    respx.get(f"{D}/releases/123").respond(json=RELEASE)
+    respx.get(f"{D}/marketplace/stats/123").respond(json=STATS)
+    digger = CrateDigger(Settings(discogs_token="t", ebay_client_id="", ebay_client_secret=""))
+    out = await digger.find_copies(123)
+    assert out["ebay_configured"] is False
+    assert out["discogs_market"]["num_for_sale"] == 42 and out["copies"] == []
+    await digger.aclose()

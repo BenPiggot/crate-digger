@@ -95,7 +95,7 @@ $("releases").addEventListener("click", async (e) => {
   try {
     const data = await api(`/api/releases/${btn.dataset.id}/copies`);
     current = data.copies; renderResults(data);
-    status(data.matched_by === "barcode"
+    status(!data.ebay_configured ? data.note : data.matched_by === "barcode"
       ? "Matched on eBay by this pressing's barcode."
       : "Matched on eBay by artist and title. Copies tagged “exact pressing” mention its catalog number; others may be different pressings.");
   } catch (err) { status(err.message, true); }
@@ -107,7 +107,7 @@ function renderResults(data) {
     <div class="summary">
       <div><span>Release</span><b>${esc(r.artist)} – ${esc(r.title)}</b>
         <span>${esc([r.year, r.country, r.label, r.catno].filter(Boolean).join(" · "))}</span></div>
-      <div><span>eBay copies</span><b>${data.count}</b></div>
+      <div><span>eBay copies</span><b>${data.ebay_configured ? data.count : "—"}</b>${data.ebay_configured ? "" : "<span>needs eBay keys</span>"}</div>
       <div><span>On Discogs</span><b>${m.num_for_sale}</b><span>from ${money(m.lowest_price, m.currency)}</span></div>
     </div>
     <table>
@@ -119,7 +119,8 @@ function renderResults(data) {
       <tbody id="rows"></tbody>
     </table>`;
   document.querySelectorAll("th").forEach(th => th.onclick = () => sortBy(th.dataset.k));
-  renderRows();
+  if (!data.ebay_configured) document.querySelector("table").remove();
+  else renderRows();
 }
 
 function renderRows() {

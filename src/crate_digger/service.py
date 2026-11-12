@@ -65,6 +65,20 @@ class CrateDigger:
             self.discogs.get_market_stats(release_id, self.settings.currency),
         )
 
+        if not self.ebay.configured:
+            return {
+                "release": release.to_dict(),
+                "discogs_market": stats.to_dict(),
+                "ebay_configured": False,
+                "matched_by": None,
+                "count": 0,
+                "copies": [],
+                "note": (
+                    "eBay keys aren't set, so only Discogs' totals are shown. "
+                    "Add EBAY_CLIENT_ID and EBAY_CLIENT_SECRET to list individual copies."
+                ),
+            }
+
         copies: dict[str, Copy] = {}
         matched_by = "keywords"
         # 1) Barcode search is the most precise. eBay only supports UPC (12 digits).
@@ -98,6 +112,7 @@ class CrateDigger:
         return {
             "release": release.to_dict(),
             "discogs_market": stats.to_dict(),
+            "ebay_configured": True,
             "matched_by": matched_by,
             "count": len(results),
             "copies": [c.to_dict() for c in results],
