@@ -24,6 +24,12 @@
   .rel .noimg { width:52px; height:52px; border-radius:4px; background:var(--line); flex:none; }
   .rel img { width:52px; height:52px; object-fit:cover; border-radius:4px; background:var(--line); flex:none; }
   .rel small { color:var(--muted); display:block; }
+  .sellers { display:block; margin-top:10px; font-size:13px; color:var(--muted); }
+  .sellers input { display:block; width:100%; margin-top:4px; }
+  .scans { color:var(--muted); font-size:13px; margin:-4px 0 12px; }
+  .tag.src { background:#eee9e2; color:var(--fg); }
+  details summary { cursor:pointer; color:var(--accent); }
+  details p { margin:6px 0 0; white-space:pre-wrap; max-width:320px; font-size:13px; }
   .summary { display:flex; gap:24px; flex-wrap:wrap; padding:16px; background:#fff; border:1px solid var(--line); border-radius:10px; margin:24px 0 12px; }
   .summary b { display:block; font-size:20px; }
   .summary span { color:var(--muted); font-size:13px; }
@@ -39,13 +45,16 @@
 <body>
 <main>
   <h1>crate-digger</h1>
-  <p class="sub">Find a specific pressing on Discogs, then see every copy for sale on eBay.</p>
+  <p class="sub">Find a specific pressing on Discogs, then see every copy for sale from the record stores you follow.</p>
 
   <form id="search">
     <input id="q" placeholder="Artist, title, or both (e.g. Radiohead OK Computer)" autofocus>
     <input id="catno" class="small" placeholder="Catalog # (optional)">
     <button>Search</button>
   </form>
+  <label class="sellers">Discogs sellers to search
+    <input id="sellers" placeholder="Seller usernames, comma-separated (e.g. your favorite record stores)">
+  </label>
 
   <div id="status" class="status"></div>
   <div id="releases" class="releases"></div>
@@ -57,6 +66,14 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money = (v, cur) => v == null ? "—" : new Intl.NumberFormat(undefined, {style:"currency", currency: cur || "USD"}).format(v);
 let current = [];
+const SELLERS_KEY = "crate-digger-sellers";
+(async () => {
+  let saved = null;
+  try { saved = localStorage.getItem(SELLERS_KEY); } catch (_) {}
+  if (saved !== null) { $("sellers").value = saved; return; }
+  try { const cfg = await api("/api/config"); $("sellers").value = cfg.default_sellers.join(", "); } catch (_) {}
+})();
+$("sellers").addEventListener("change", () => { try { localStorage.setItem(SELLERS_KEY, $("sellers").value); } catch (_) {} });
 
 function status(msg, err = false) { $("status").textContent = msg; $("status").className = "status" + (err ? " err" : ""); }
 
@@ -91,13 +108,13 @@ $("search").addEventListener("submit", async (e) => {
 $("releases").addEventListener("click", async (e) => {
   const btn = e.target.closest(".rel"); if (!btn) return;
   $("releases").innerHTML = "";
-  status("Finding copies for sale… (fetching grading and shipping for each listing)");
+  status("Searching seller inventories… The first scan of a big store can take a few minutes; after that it's cached.");
+  const params = new URLSearchParams();
+  if ($("sellers").value.trim()) params.set("sellers", $("sellers").value);
   try {
-    const data = await api(`/api/releases/${btn.dataset.id}/copies`);
+    const data = await api(`/api/releases/${btn.dataset.id}/copies?${params}`);
     current = data.copies; renderResults(data);
-    status(data.matched_by === "barcode"
-      ? "Matched on eBay by this pressing's barcode."
-      : "Matched on eBay by artist and title. Copies tagged “exact pressing” mention its catalog number; others may be different pressings.");
+    status(data.note);
   } catch (err) { status(err.message, true); }
 });
 
@@ -107,14 +124,16 @@ function renderResults(data) {
     <div class="summary">
       <div><span>Release</span><b>${esc(r.artist)} – ${esc(r.title)}</b>
         <span>${esc([r.year, r.country, r.label, r.catno].filter(Boolean).join(" · "))}</span></div>
-      <div><span>eBay copies</span><b>${data.count}</b></div>
-      <div><span>On Discogs</span><b>${m.num_for_sale}</b><span>from ${money(m.lowest_price, m.currency)}</span></div>
+      <div><span>Copies found</span><b>${data.count}</b><span>${data.sellers_searched.length} seller${data.sellers_searched.length === 1 ? "" : "s"}${data.ebay_configured ? " + eBay" : ""}</span></div>
+      <div><span>All of Discogs</span><b>${m.num_for_sale}</b><span>from ${money(m.lowest_price, m.currency)}</span></div>
     </div>
+    <div class="scans">${data.sellers_searched.map(s => esc(s.seller) + ": " +
+      (s.error ? "⚠ " + esc(s.error) : `${s.listings_scanned.toLocaleString()} listings${s.from_cache ? `, cached ${s.scanned_minutes_ago} min ago` : ", just scanned"}${s.truncated ? " (partial)" : ""}`)).join(" · ")}</div>
     <table>
       <thead><tr>
         <th data-k="title">Listing</th><th data-k="price">Price</th><th data-k="shipping_cost">Shipping</th>
         <th data-k="total">Total</th><th data-k="record_grading">Record / sleeve</th>
-        <th data-k="ships_from">From</th><th data-k="returns">Returns</th>
+        <th data-k="ships_from">From</th><th data-k="returns">Terms</th>
       </tr></thead>
       <tbody id="rows"></tbody>
     </table>`;
@@ -126,15 +145,17 @@ function renderRows() {
   $("rows").innerHTML = current.map(c => `
     <tr>
       <td><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a>
+        <span class="tag src">${c.source === "discogs" ? "Discogs" : "eBay"}</span>
         ${c.catno_match ? '<span class="tag">exact pressing</span>' : ""}
-        <div class="muted">${esc(c.seller)}${c.seller_feedback_pct ? ` (${esc(c.seller_feedback_pct)}%)` : ""} · ${esc((c.buying_options||[]).join(", "))}</div></td>
+        <div class="muted">${esc(c.seller)}${c.seller_rating || c.seller_feedback_pct ? ` (${esc(c.seller_rating || c.seller_feedback_pct)}%)` : ""}${(c.buying_options||[]).length ? " · " + esc(c.buying_options.join(", ")) : ""}</div>
+        ${c.comments ? `<div class="muted">“${esc(c.comments)}”</div>` : ""}</td>
       <td class="num">${money(c.price, c.currency)}</td>
-      <td class="num">${c.shipping_cost == null ? `<span class="muted">${esc(c.shipping_type || "see listing")}</span>` : c.shipping_cost === 0 ? "Free" : money(c.shipping_cost, c.currency)}</td>
-      <td class="num"><b>${money(c.total, c.currency)}</b></td>
+      <td class="num">${c.shipping_cost == null ? `<span class="muted">${c.shipping_policy ? "see policy" : "see listing"}</span>` : c.shipping_cost === 0 ? "Free" : money(c.shipping_cost, c.currency)}</td>
+      <td class="num"><b>${c.total == null ? "—" : money(c.total, c.currency)}</b></td>
       <td>${esc(c.record_grading || c.condition || "—")}<div class="muted">${c.sleeve_grading ? "Sleeve: " + esc(c.sleeve_grading) : ""}</div></td>
       <td>${esc(c.ships_from || "—")}</td>
-      <td>${esc(c.returns || "—")}</td>
-    </tr>`).join("") || `<tr><td colspan="7" class="muted">No copies on eBay right now.</td></tr>`;
+      <td>${c.shipping_policy ? `<details><summary>Shipping policy</summary><p>${esc(c.shipping_policy)}</p></details>` : ""}${esc(c.returns || (c.shipping_policy ? "" : "—"))}</td>
+    </tr>`).join("") || `<tr><td colspan="7" class="muted">No copies found from these sellers right now.</td></tr>`;
 }
 
 let sortKey = null, sortAsc = true;

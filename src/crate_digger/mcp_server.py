@@ -22,7 +22,10 @@ mcp = MCPServer(
     "crate-digger",
     instructions=(
         "Find copies of a specific vinyl record for sale. First call search_releases to find "
-        "the Discogs release_id of the exact pressing, then call find_copies with that id."
+        "the Discogs release_id of the exact pressing, then call find_copies with that id. "
+        "find_copies searches the inventories of chosen Discogs sellers (pass `sellers`, or use "
+        "the configured defaults) and eBay when it is configured. The first scan of a large "
+        "store can take a few minutes; later searches use a cache."
     ),
 )
 _digger: CrateDigger | None = None
@@ -73,24 +76,34 @@ async def get_market_overview(release_id: int) -> dict[str, Any]:
 @mcp.tool()
 async def find_copies(
     release_id: int,
+    sellers: list[str] | None = None,
     max_price: float | None = None,
+    refresh: bool = False,
     limit: int = 50,
     with_details: bool = True,
 ) -> dict[str, Any]:
-    """List every copy of a Discogs release currently for sale on eBay.
+    """List copies of a Discogs release for sale, with price, condition and shipping terms.
 
-    Each copy includes price, shipping cost and type, total, condition, record and
-    sleeve grading (when the seller provided it), ships-from country, seller, return
-    terms and a link. Exact matches (barcode or catalog number) are listed first.
+    Sources: the public inventories of the given Discogs `sellers` (usernames, e.g. record
+    stores; defaults to the configured list), plus eBay if configured. Discogs copies are
+    always the exact pressing and include media and sleeve grading, ships-from country,
+    seller rating, the seller's shipping policy and a link. Set refresh=true to rescan
+    inventories instead of using the cache. Exact matches are listed first, cheapest first.
     """
     return await _call(digger().find_copies(
-        release_id, max_price=max_price, limit=limit, with_details=with_details
+        release_id, sellers=sellers, max_price=max_price, refresh=refresh, limit=limit, with_details=with_details
     ))
 
 
 @mcp.tool()
+async def refresh_seller_inventories(sellers: list[str]) -> list[dict[str, Any]]:
+    """Rescan Discogs sellers' inventories now and cache them. Returns listings scanned per seller."""
+    return await _call(digger().refresh_sellers(sellers))
+
+
+@mcp.tool()
 async def get_copy_details(item_id: str) -> dict[str, Any]:
-    """Full details for one eBay listing: grading, shipping and return terms."""
+    """Full details for one listing: a numeric Discogs listing id or an eBay item id."""
     return await _call(digger().copy_details(item_id))
 
 
