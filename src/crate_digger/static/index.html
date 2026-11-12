@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>crate-digger</title>
+<style>
+  :root { --bg:#faf8f5; --fg:#1d1b19; --muted:#76706a; --line:#e6e1da; --accent:#b4441f; --ok:#2f7a4a; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  form { display:flex; gap:8px; flex-wrap:wrap; }
+  input { flex:1 1 260px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font:inherit; background:#fff; }
+  input.small { flex:0 1 160px; }
+  button { padding:10px 16px; border:0; border-radius:8px; background:var(--fg); color:#fff; font:inherit; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  .status { color:var(--muted); margin:16px 0; min-height:1.4em; }
+  .status.err { color:var(--accent); }
+  .releases { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px; margin-top:8px; }
+  .rel { display:flex; gap:10px; text-align:left; background:#fff; color:var(--fg); border:1px solid var(--line); padding:10px; }
+  .rel:hover { border-color:var(--fg); }
+  .rel .noimg { width:52px; height:52px; border-radius:4px; background:var(--line); flex:none; }
+  .rel img { width:52px; height:52px; object-fit:cover; border-radius:4px; background:var(--line); flex:none; }
+  .rel small { color:var(--muted); display:block; }
+  .summary { display:flex; gap:24px; flex-wrap:wrap; padding:16px; background:#fff; border:1px solid var(--line); border-radius:10px; margin:24px 0 12px; }
+  .summary b { display:block; font-size:20px; }
+  .summary span { color:var(--muted); font-size:13px; }
+  table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  th, td { padding:9px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); background:#f3f0eb; cursor:pointer; user-select:none; }
+  td.num { text-align:right; font-variant-numeric: tabular-nums; white-space:nowrap; }
+  .tag { display:inline-block; font-size:11px; padding:1px 6px; border-radius:99px; background:#e7f2ea; color:var(--ok); margin-left:4px; }
+  a { color:var(--accent); }
+  .muted { color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>crate-digger</h1>
+  <p class="sub">Find a specific pressing on Discogs, then see every copy for sale on eBay.</p>
+
+  <form id="search">
+    <input id="q" placeholder="Artist, title, or both (e.g. Radiohead OK Computer)" autofocus>
+    <input id="catno" class="small" placeholder="Catalog # (optional)">
+    <button>Search</button>
+  </form>
+
+  <div id="status" class="status"></div>
+  <div id="releases" class="releases"></div>
+  <div id="results"></div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = (v, cur) => v == null ? "—" : new Intl.NumberFormat(undefined, {style:"currency", currency: cur || "USD"}).format(v);
+let current = [];
+
+function status(msg, err = false) { $("status").textContent = msg; $("status").className = "status" + (err ? " err" : ""); }
+
+async function api(path) {
+  const res = await fetch(path);
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.detail || res.statusText);
+  return body;
+}
+
+$("search").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("results").innerHTML = ""; $("releases").innerHTML = "";
+  const params = new URLSearchParams({ q: $("q").value });
+  if ($("catno").value) params.set("catno", $("catno").value);
+  status("Searching Discogs…");
+  try {
+    const rels = await api(`/api/releases?${params}`);
+    if (!rels.length) return status("No releases found. Try fewer words or drop the catalog number.");
+    status("Pick the exact pressing:");
+    $("releases").innerHTML = rels.map(r => `
+      <button class="rel" data-id="${r.release_id}">
+        ${r.thumb ? `<img src="${esc(r.thumb)}" alt="">` : `<div class="noimg"></div>`}
+        <div>${esc(r.title)}
+          <small>${esc([r.year, r.country, r.label, r.catno].filter(Boolean).join(" · "))}</small>
+          <small>${esc((r.formats || []).join(", "))}</small>
+        </div>
+      </button>`).join("");
+  } catch (err) { status(err.message, true); }
+});
+
+$("releases").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".rel"); if (!btn) return;
+  $("releases").innerHTML = "";
+  status("Finding copies for sale… (fetching grading and shipping for each listing)");
+  try {
+    const data = await api(`/api/releases/${btn.dataset.id}/copies`);
+    current = data.copies; renderResults(data);
+    status(data.matched_by === "barcode"
+      ? "Matched on eBay by this pressing's barcode."
+      : "Matched on eBay by artist and title. Copies tagged “exact pressing” mention its catalog number; others may be different pressings.");
+  } catch (err) { status(err.message, true); }
+});
+
+function renderResults(data) {
+  const r = data.release, m = data.discogs_market;
+  $("results").innerHTML = `
+    <div class="summary">
+      <div><span>Release</span><b>${esc(r.artist)} – ${esc(r.title)}</b>
+        <span>${esc([r.year, r.country, r.label, r.catno].filter(Boolean).join(" · "))}</span></div>
+      <div><span>eBay copies</span><b>${data.count}</b></div>
+      <div><span>On Discogs</span><b>${m.num_for_sale}</b><span>from ${money(m.lowest_price, m.currency)}</span></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th data-k="title">Listing</th><th data-k="price">Price</th><th data-k="shipping_cost">Shipping</th>
+        <th data-k="total">Total</th><th data-k="record_grading">Record / sleeve</th>
+        <th data-k="ships_from">From</th><th data-k="returns">Returns</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>`;
+  document.querySelectorAll("th").forEach(th => th.onclick = () => sortBy(th.dataset.k));
+  renderRows();
+}
+
+function renderRows() {
+  $("rows").innerHTML = current.map(c => `
+    <tr>
+      <td><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a>
+        ${c.catno_match ? '<span class="tag">exact pressing</span>' : ""}
+        <div class="muted">${esc(c.seller)}${c.seller_feedback_pct ? ` (${esc(c.seller_feedback_pct)}%)` : ""} · ${esc((c.buying_options||[]).join(", "))}</div></td>
+      <td class="num">${money(c.price, c.currency)}</td>
+      <td class="num">${c.shipping_cost == null ? `<span class="muted">${esc(c.shipping_type || "see listing")}</span>` : c.shipping_cost === 0 ? "Free" : money(c.shipping_cost, c.currency)}</td>
+      <td class="num"><b>${money(c.total, c.currency)}</b></td>
+      <td>${esc(c.record_grading || c.condition || "—")}<div class="muted">${c.sleeve_grading ? "Sleeve: " + esc(c.sleeve_grading) : ""}</div></td>
+      <td>${esc(c.ships_from || "—")}</td>
+      <td>${esc(c.returns || "—")}</td>
+    </tr>`).join("") || `<tr><td colspan="7" class="muted">No copies on eBay right now.</td></tr>`;
+}
+
+let sortKey = null, sortAsc = true;
+function sortBy(k) {
+  sortAsc = sortKey === k ? !sortAsc : true; sortKey = k;
+  current.sort((a, b) => {
+    const x = a[k] ?? "", y = b[k] ?? "";
+    return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y))) * (sortAsc ? 1 : -1);
+  });
+  renderRows();
+}
+</script>
+</body>
+</html>
