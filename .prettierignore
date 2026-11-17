@@ -1,0 +1,8 @@
+dist/
+coverage/
+crate-digger-env/
+.venv/
+src/crate_digger/
+package-lock.json
+PLAN.md
+README.md

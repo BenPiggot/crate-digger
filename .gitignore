@@ -6,3 +6,6 @@ __pycache__/
 dist/
 build/
 crate-digger-env/
+node_modules/
+coverage/
+*.tsbuildinfo
