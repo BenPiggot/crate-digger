@@ -1,3 +1,4 @@
+import type { SellerScanSummary } from "../listing-source.js";
 import type { Copy, MarketStats, Release, ReleaseSearchResult } from "../models.js";
 
 export function formatReleases(releases: ReleaseSearchResult[]): string {
@@ -16,7 +17,7 @@ export function formatMarketOverview(releaseId: number, release: Release, discog
     if (!release) {
         return `Release ${releaseId} not found.`;
     }
-    
+
     if (!discogs_market) {
         return `Release ${releaseId}: ${release.title} (${release.year ?? "?"}, ${release.country ?? "?"}) - ${release.label ?? "?"} ${release.catno ?? "?"}\nDiscogs Market: not found.`;
     }
@@ -36,4 +37,25 @@ export function formatCopies(copies: Copy[]): string {
     ));
 
     return `${copies.length} copies, exact matches first, cheapest first:\n${lines.join("\n")}`;
+}
+
+export function formatSellerInventories(sellers: SellerScanSummary[]): string {
+    if (sellers.length === 0) {
+        return "No sellers scanned.";
+    }
+
+    const lines = sellers.map((s) => (
+        `${s.seller} - ${s.listings_scanned} items, last scanned: ${s.scanned_minutes_ago ? String(s.scanned_minutes_ago) : "never"}`
+    ));
+
+    return `${sellers.length} sellers scanned:\n${lines.join("\n")}`;
+}   
+
+export function formatCopyDetails(copy: Copy): string {
+    if (!copy) {
+        return "Copy not found.";
+    }
+
+    return `Copy details: Source: ${copy.source} - Item ID: ${copy.item_id} - Title: ${copy.title} - Price: ${copy.price ?? "?"} ${copy.currency ?? "?"} 
+        - Shipping Cost: ${copy.shipping_cost ?? "?"} (${copy.shipping_type ?? "?"} - Total: ${copy.total ?? "?"}`;
 }

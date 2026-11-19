@@ -2,7 +2,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { CrateDigger } from "../service.js";
 import { settingsFromEnv } from "../config.js";
-import { formatReleases, formatCopies, formatMarketOverview} from "./format.js";
+import { 
+    formatReleases, 
+    formatCopies, 
+    formatMarketOverview,
+    formatSellerInventories,
+    formatCopyDetails
+} from "./format.js";
+import { safe } from "./clean.js";
 
 export function createServer(): McpServer {
     const server = new McpServer({
@@ -31,12 +38,10 @@ export function createServer(): McpServer {
                 limit: z.number().int().min(1).max(100).default(10),
             },
         },
-        async ({ query, artist, title, catno, barcode, limit }) => {
+        safe(async ({ query, artist, title, catno, barcode, limit }) => {
             const data = await digger().searchReleases(query ?? "", { artist, title, catno, barcode, limit });
-            return {
-                content: [{ type: "text", text: formatReleases(data) }],
-            };
-        },
+            return formatReleases(data);
+        })
     );
 
     server.registerTool(
@@ -48,12 +53,10 @@ export function createServer(): McpServer {
                 release_id: z.number().int().min(1),
             },
         },
-        async ({ release_id }) => {
+        safe(async ({ release_id }) => {
             const data = await digger().marketOverview(release_id);
-            return {
-                content: [{ type: "text", text: formatMarketOverview(release_id, data.release, data.discogs_market) }],
-            };
-        },
+            return formatMarketOverview(release_id, data.release, data.discogs_market);
+        }),
     );
 
     server.registerTool(
@@ -73,7 +76,7 @@ export function createServer(): McpServer {
                 with_details: z.boolean().default(true),
             },
         },      
-        async ({ release_id, sellers, max_price, refresh, limit, with_details }) => {
+        safe(async ({ release_id, sellers, max_price, refresh, limit, with_details }) => {
             const data = await digger().findCopies(release_id, {
                 sellers,
                 maxPrice: max_price,
@@ -81,10 +84,8 @@ export function createServer(): McpServer {
                 limit,
                 withDetails: with_details,
             });
-            return {
-                content: [{ type: "text", text: formatCopies(data.copies) }],
-            };  
-        }
+            return formatCopies(data.copies);
+        })
     )
 
     server.registerTool(
@@ -95,12 +96,10 @@ export function createServer(): McpServer {
                 sellers: z.array(z.string()),
             },
         },
-        async ({ sellers }) => {
+        safe(async ({ sellers }) => {
             const data = await digger().refreshSellers(sellers);
-            return {
-                content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
-            };
-        },
+            return formatSellerInventories(data);
+        })
     );
 
     server.registerTool(
@@ -113,12 +112,10 @@ export function createServer(): McpServer {
                 item_id: z.string(),
             },
         },
-        async ({ item_id }) => {
+        safe(async ({ item_id }) => {
             const data = await digger().copyDetails(item_id);
-            return {
-                content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
-            };
-        },
+            return formatCopyDetails(data);
+        })
     );
 
     return server;
