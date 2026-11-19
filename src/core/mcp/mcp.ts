@@ -1,0 +1,126 @@
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import { CrateDigger } from "../service.js";
+import { settingsFromEnv } from "../config.js";
+import { formatReleases, formatCopies, formatMarketOverview} from "./format.js";
+
+export function createServer(): McpServer {
+    const server = new McpServer({
+        name: "crate-digger-server",
+        version: "1.0.0",
+    });
+
+    function digger() {
+        const _settings = settingsFromEnv(process.env, { loadDotenv: true });
+        return new CrateDigger(_settings);
+    }
+
+    server.registerTool(
+        "search_releases",
+        {
+            description:
+                "Search Discogs for vinyl releases (specific pressings). " +
+                "Returns candidates with release_id, title, year, country, label and catalog number. " +
+                "Use catno or barcode to pin down an exact pressing.",
+            inputSchema: {
+                query: z.string().optional(),
+                artist: z.string().optional(),
+                title: z.string().optional(),
+                catno: z.string().optional(),
+                barcode: z.string().optional(),
+                limit: z.number().int().min(1).max(100).default(10),
+            },
+        },
+        async ({ query, artist, title, catno, barcode, limit }) => {
+            const data = await digger().searchReleases(query ?? "", { artist, title, catno, barcode, limit });
+            return {
+                content: [{ type: "text", text: formatReleases(data) }],
+            };
+        },
+    );
+
+    server.registerTool(
+        "get_market_overview",
+        {
+            description:
+                "Release details plus Discogs' aggregate marketplace stats (copies for sale, lowest price).",
+            inputSchema: {
+                release_id: z.number().int().min(1),
+            },
+        },
+        async ({ release_id }) => {
+            const data = await digger().marketOverview(release_id);
+            return {
+                content: [{ type: "text", text: formatMarketOverview(release_id, data.release, data.discogs_market) }],
+            };
+        },
+    );
+
+    server.registerTool(
+        "find_copies",
+        {
+            description:
+                "List copies of a Discogs release for sale, with price, condition and shipping terms. " +
+                "Sources: the public inventories of the given Discogs `sellers` (usernames, e.g. record stores; defaults to the configured list), plus eBay if configured. " +
+                "Discogs copies are always the exact pressing and include media and sleeve grading, ships-from country, seller rating, the seller's shipping policy and a link. " +
+                "Set refresh=true to rescan inventories instead of using the cache. Exact matches are listed first, cheapest first.",
+            inputSchema: {
+                release_id: z.number().int().min(1),
+                sellers: z.array(z.string()).optional(),
+                max_price: z.number().optional(),
+                refresh: z.boolean().default(false),
+                limit: z.number().int().min(1).max(100).default(50),
+                with_details: z.boolean().default(true),
+            },
+        },      
+        async ({ release_id, sellers, max_price, refresh, limit, with_details }) => {
+            const data = await digger().findCopies(release_id, {
+                sellers,
+                maxPrice: max_price,
+                refresh,
+                limit,
+                withDetails: with_details,
+            });
+            return {
+                content: [{ type: "text", text: formatCopies(data.copies) }],
+            };  
+        }
+    )
+
+    server.registerTool(
+        "refresh_seller_inventories",
+        {
+            description: "Rescan Discogs sellers' inventories now and cache them. Returns listings scanned per seller.",
+            inputSchema: {
+                sellers: z.array(z.string()),
+            },
+        },
+        async ({ sellers }) => {
+            const data = await digger().refreshSellers(sellers);
+            return {
+                content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+            };
+        },
+    );
+
+    server.registerTool(
+        "get_copy_details",
+        {
+            description:
+                "Full details for one listing: a numeric Discogs listing id or an eBay item id. " +
+                "Discogs copies include media and sleeve grading, ships-from country, seller rating, the seller's shipping policy and a link.",
+            inputSchema: {
+                item_id: z.string(),
+            },
+        },
+        async ({ item_id }) => {
+            const data = await digger().copyDetails(item_id);
+            return {
+                content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+            };
+        },
+    );
+
+    return server;
+}
+
