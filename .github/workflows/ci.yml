@@ -1,34 +1,34 @@
 name: CI
 on: [push, pull_request]
 jobs:
-  # The Python version stays as the reference until the TypeScript port matches it (PLAN.md).
-  python:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - run: pip install -e ".[dev]"
-      - run: pytest -q
+    # The Python version stays as the reference until the TypeScript port matches it (PLAN.md).
+    python:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                python-version: ["3.11", "3.12", "3.13"]
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: ${{ matrix.python-version }}
+            - run: pip install -e ".[dev]"
+            - run: pytest -q
 
-  typescript:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [22, 24]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm test
-      - run: npm run build
+    typescript:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                node-version: [22, 24]
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: npm
+            - run: npm ci
+            - run: npm run typecheck
+            - run: npm run lint
+            - run: npm run format:check
+            - run: npm test
+            - run: npm run build

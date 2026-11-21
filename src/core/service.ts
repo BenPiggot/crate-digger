@@ -3,18 +3,18 @@
 import type { Settings } from "./config.js";
 import { DiscogsClient, type SearchFilters } from "./discogs.js";
 import {
-  DiscogsInventorySource,
-  InventoryIndex,
-  discogsCopy,
-  scanSummary,
-  uniqueSellers,
+    DiscogsInventorySource,
+    InventoryIndex,
+    discogsCopy,
+    scanSummary,
+    uniqueSellers,
 } from "./inventory.js";
 import type { ListingSource, SearchOptions, SellerScanSummary } from "./listing-source.js";
 import type { Copy, MarketStats, Release, ReleaseSearchResult } from "./models.js";
 
 /** Bad input from a caller (the web layer maps it to HTTP 400). */
 export class InvalidInputError extends Error {
-  override name = "InvalidInputError";
+    override name = "InvalidInputError";
 }
 
 const norm = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -24,137 +24,143 @@ const norm = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]/g, 
  * For sources whose listings aren't tied to a Discogs release, e.g. eBay later.
  */
 export function catnoInTitle(catno: string | null | undefined, title: string): boolean {
-  if (!catno || catno.toLowerCase() === "none") return false;
-  return norm(title).includes(norm(catno));
+    if (!catno || catno.toLowerCase() === "none") return false;
+    return norm(title).includes(norm(catno));
 }
 
 /** Artist + title search keywords. Discogs appends "(2)" etc. to disambiguate artists; sellers don't. */
 export function keywordsFor(release: Pick<Release, "artist" | "title">): string {
-  const artist = release.artist.replace(/\s*\(\d+\)/g, "");
-  return `${artist} ${release.title}`.trim();
+    const artist = release.artist.replace(/\s*\(\d+\)/g, "");
+    return `${artist} ${release.title}`.trim();
 }
 
 /** Exact pressings first, then cheapest (total if known, else price). */
 export function compareCopies(a: Copy, b: Copy): number {
-  if (a.catno_match !== b.catno_match) return a.catno_match ? -1 : 1;
-  const cost = (c: Copy) => c.total ?? c.price ?? Number.POSITIVE_INFINITY;
-  return cost(a) - cost(b);
+    if (a.catno_match !== b.catno_match) return a.catno_match ? -1 : 1;
+    const cost = (c: Copy) => c.total ?? c.price ?? Number.POSITIVE_INFINITY;
+    return cost(a) - cost(b);
 }
 
 export interface MarketOverview {
-  release: Release;
-  discogs_market: MarketStats;
+    release: Release;
+    discogs_market: MarketStats;
 }
 
 export interface FindCopiesResult extends MarketOverview {
-  sellers_searched: SellerScanSummary[];
-  count: number;
-  copies: Copy[];
-  note: string;
+    sellers_searched: SellerScanSummary[];
+    count: number;
+    copies: Copy[];
+    note: string;
 }
 
 export type FindCopiesOptions = Partial<Omit<SearchOptions, "sellers" | "maxPrice">> & {
-  /** Defaults to the configured sellers. */
-  sellers?: readonly string[] | null | undefined;
-  maxPrice?: number | null | undefined;
+    /** Defaults to the configured sellers. */
+    sellers?: readonly string[] | null | undefined;
+    maxPrice?: number | null | undefined;
 };
 
 export interface CrateDiggerDeps {
-  discogs?: DiscogsClient;
-  inventory?: InventoryIndex;
-  /** Defaults to Discogs seller inventories only. */
-  sources?: ListingSource[];
+    discogs?: DiscogsClient;
+    inventory?: InventoryIndex;
+    /** Defaults to Discogs seller inventories only. */
+    sources?: ListingSource[];
 }
 
 export class CrateDigger {
-  readonly discogs: DiscogsClient;
-  readonly inventory: InventoryIndex;
-  readonly sources: readonly ListingSource[];
+    readonly discogs: DiscogsClient;
+    readonly inventory: InventoryIndex;
+    readonly sources: readonly ListingSource[];
 
-  constructor(
-    readonly settings: Settings,
-    deps: CrateDiggerDeps = {},
-  ) {
-    this.discogs = deps.discogs ?? new DiscogsClient(settings.discogsToken, settings.userAgent);
-    this.inventory =
-      deps.inventory ??
-      new InventoryIndex(this.discogs, {
-        cacheDir: settings.cacheDir,
-        ttlMs: settings.inventoryTtlHours * 3600 * 1000,
-        maxPages: settings.maxInventoryPages,
-      });
-    this.sources = deps.sources ?? [
-      new DiscogsInventorySource(this.discogs, this.inventory, settings.currency),
-    ];
-  }
-
-  async searchReleases(query: string, filters: SearchFilters = {}): Promise<ReleaseSearchResult[]> {
-    return this.discogs.search(query, filters);
-  }
-
-  async marketOverview(releaseId: number): Promise<MarketOverview> {
-    const [release, stats] = await Promise.all([
-      this.discogs.getRelease(releaseId),
-      this.discogs.getMarketStats(releaseId, this.settings.currency),
-    ]);
-    return { release, discogs_market: stats };
-  }
-
-  /** Every copy of this pressing for sale from the configured listing sources. */
-  async findCopies(releaseId: number, options: FindCopiesOptions = {}): Promise<FindCopiesResult> {
-    const opts: SearchOptions = {
-      sellers: options.sellers?.length ? options.sellers : this.settings.discogsSellers,
-      refresh: options.refresh ?? false,
-      maxPrice: options.maxPrice ?? null,
-      limit: options.limit ?? 50,
-      withDetails: options.withDetails ?? true,
-      detailsLimit: options.detailsLimit ?? 20,
-    };
-    const { release, discogs_market } = await this.marketOverview(releaseId);
-
-    const results = await Promise.all(
-      this.sources.filter((s) => s.configured).map((s) => s.findCopies(release, opts)),
-    );
-
-    let copies = results.flatMap((r) => r.copies);
-    if (opts.maxPrice !== null) {
-      const max = opts.maxPrice;
-      copies = copies.filter((c) => c.price === null || c.price <= max);
+    constructor(
+        readonly settings: Settings,
+        deps: CrateDiggerDeps = {},
+    ) {
+        this.discogs = deps.discogs ?? new DiscogsClient(settings.discogsToken, settings.userAgent);
+        this.inventory =
+            deps.inventory ??
+            new InventoryIndex(this.discogs, {
+                cacheDir: settings.cacheDir,
+                ttlMs: settings.inventoryTtlHours * 3600 * 1000,
+                maxPages: settings.maxInventoryPages,
+            });
+        this.sources = deps.sources ?? [
+            new DiscogsInventorySource(this.discogs, this.inventory, settings.currency),
+        ];
     }
-    copies.sort(compareCopies);
 
-    return {
-      release,
-      discogs_market,
-      sellers_searched: results.flatMap((r) => r.sellersSearched ?? []),
-      count: copies.length,
-      copies,
-      note: results.flatMap((r) => r.notes ?? []).join(" "),
-    };
-  }
-
-  /** Rescan seller inventories now (e.g. to warm the cache before searching). */
-  async refreshSellers(sellers: readonly string[]): Promise<SellerScanSummary[]> {
-    const summaries: SellerScanSummary[] = [];
-    for (const seller of uniqueSellers(sellers)) {
-      summaries.push(scanSummary(await this.inventory.scan(seller, true)));
+    async searchReleases(
+        query: string,
+        filters: SearchFilters = {},
+    ): Promise<ReleaseSearchResult[]> {
+        return this.discogs.search(query, filters);
     }
-    return summaries;
-  }
 
-  /** Full details for one Discogs listing (numeric listing id). */
-  async copyDetails(itemId: string): Promise<Copy> {
-    if (!/^\d+$/.test(itemId)) {
-      throw new InvalidInputError(`Not a Discogs listing id: "${itemId}"`);
+    async marketOverview(releaseId: number): Promise<MarketOverview> {
+        const [release, stats] = await Promise.all([
+            this.discogs.getRelease(releaseId),
+            this.discogs.getMarketStats(releaseId, this.settings.currency),
+        ]);
+        return { release, discogs_market: stats };
     }
-    const detail = await this.discogs.getListing(Number(itemId), this.settings.currency);
-    return discogsCopy(
-      {
-        listing_id: detail.id ?? Number(itemId),
-        description: detail.release?.description ?? null,
-        uri: detail.uri ?? null,
-      },
-      detail,
-    );
-  }
+
+    /** Every copy of this pressing for sale from the configured listing sources. */
+    async findCopies(
+        releaseId: number,
+        options: FindCopiesOptions = {},
+    ): Promise<FindCopiesResult> {
+        const opts: SearchOptions = {
+            sellers: options.sellers?.length ? options.sellers : this.settings.discogsSellers,
+            refresh: options.refresh ?? false,
+            maxPrice: options.maxPrice ?? null,
+            limit: options.limit ?? 50,
+            withDetails: options.withDetails ?? true,
+            detailsLimit: options.detailsLimit ?? 20,
+        };
+        const { release, discogs_market } = await this.marketOverview(releaseId);
+
+        const results = await Promise.all(
+            this.sources.filter((s) => s.configured).map((s) => s.findCopies(release, opts)),
+        );
+
+        let copies = results.flatMap((r) => r.copies);
+        if (opts.maxPrice !== null) {
+            const max = opts.maxPrice;
+            copies = copies.filter((c) => c.price === null || c.price <= max);
+        }
+        copies.sort(compareCopies);
+
+        return {
+            release,
+            discogs_market,
+            sellers_searched: results.flatMap((r) => r.sellersSearched ?? []),
+            count: copies.length,
+            copies,
+            note: results.flatMap((r) => r.notes ?? []).join(" "),
+        };
+    }
+
+    /** Rescan seller inventories now (e.g. to warm the cache before searching). */
+    async refreshSellers(sellers: readonly string[]): Promise<SellerScanSummary[]> {
+        const summaries: SellerScanSummary[] = [];
+        for (const seller of uniqueSellers(sellers)) {
+            summaries.push(scanSummary(await this.inventory.scan(seller, true)));
+        }
+        return summaries;
+    }
+
+    /** Full details for one Discogs listing (numeric listing id). */
+    async copyDetails(itemId: string): Promise<Copy> {
+        if (!/^\d+$/.test(itemId)) {
+            throw new InvalidInputError(`Not a Discogs listing id: "${itemId}"`);
+        }
+        const detail = await this.discogs.getListing(Number(itemId), this.settings.currency);
+        return discogsCopy(
+            {
+                listing_id: detail.id ?? Number(itemId),
+                description: detail.release?.description ?? null,
+                uri: detail.uri ?? null,
+            },
+            detail,
+        );
+    }
 }

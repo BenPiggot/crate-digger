@@ -4,5 +4,5 @@
 export const VERSION = "0.1.0";
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  console.log(`crate-digger ${VERSION}`);
+    console.log(`crate-digger ${VERSION}`);
 }
