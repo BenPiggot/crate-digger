@@ -1,13 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { CrateDigger } from "../service.js";
-import { settingsFromEnv } from "../config.js";
-import { 
-    formatReleases, 
-    formatCopies, 
+import { CrateDigger } from "../core/service.js";
+import { settingsFromEnv } from "../core/config.js";
+import {
+    formatReleases,
+    formatCopies,
     formatMarketOverview,
     formatSellerInventories,
-    formatCopyDetails
+    formatCopyDetails,
 } from "./format.js";
 import { safe } from "./clean.js";
 
@@ -17,10 +17,8 @@ export function createServer(): McpServer {
         version: "1.0.0",
     });
 
-    function digger() {
-        const _settings = settingsFromEnv(process.env, { loadDotenv: true });
-        return new CrateDigger(_settings);
-    }
+    const _settings = settingsFromEnv(process.env, { loadDotenv: true });
+    const digger = new CrateDigger(_settings);
 
     server.registerTool(
         "search_releases",
@@ -39,9 +37,15 @@ export function createServer(): McpServer {
             },
         },
         safe(async ({ query, artist, title, catno, barcode, limit }) => {
-            const data = await digger().searchReleases(query ?? "", { artist, title, catno, barcode, limit });
+            const data = await digger.searchReleases(query ?? "", {
+                artist,
+                title,
+                catno,
+                barcode,
+                limit,
+            });
             return formatReleases(data);
-        })
+        }),
     );
 
     server.registerTool(
@@ -54,7 +58,7 @@ export function createServer(): McpServer {
             },
         },
         safe(async ({ release_id }) => {
-            const data = await digger().marketOverview(release_id);
+            const data = await digger.marketOverview(release_id);
             return formatMarketOverview(release_id, data.release, data.discogs_market);
         }),
     );
@@ -64,7 +68,7 @@ export function createServer(): McpServer {
         {
             description:
                 "List copies of a Discogs release for sale, with price, condition and shipping terms. " +
-                "Sources: the public inventories of the given Discogs `sellers` (usernames, e.g. record stores; defaults to the configured list), plus eBay if configured. " +
+                "Sources: the public inventories of the given Discogs `sellers` (usernames, e.g. record stores; defaults to the configured list). " +
                 "Discogs copies are always the exact pressing and include media and sleeve grading, ships-from country, seller rating, the seller's shipping policy and a link. " +
                 "Set refresh=true to rescan inventories instead of using the cache. Exact matches are listed first, cheapest first.",
             inputSchema: {
@@ -75,49 +79,49 @@ export function createServer(): McpServer {
                 limit: z.number().int().min(1).max(100).default(50),
                 with_details: z.boolean().default(true),
             },
-        },      
+        },
         safe(async ({ release_id, sellers, max_price, refresh, limit, with_details }) => {
-            const data = await digger().findCopies(release_id, {
+            const data = await digger.findCopies(release_id, {
                 sellers,
                 maxPrice: max_price,
                 refresh,
                 limit,
                 withDetails: with_details,
             });
-            return formatCopies(data.copies);
-        })
-    )
+            return formatCopies(data.copies, data.sellers_searched, data.note);
+        }),
+    );
 
     server.registerTool(
         "refresh_seller_inventories",
         {
-            description: "Rescan Discogs sellers' inventories now and cache them. Returns listings scanned per seller.",
+            description:
+                "Re-scan Discogs sellers' inventories now and cache them. Returns listings scanned per seller.",
             inputSchema: {
                 sellers: z.array(z.string()),
             },
         },
         safe(async ({ sellers }) => {
-            const data = await digger().refreshSellers(sellers);
+            const data = await digger.refreshSellers(sellers);
             return formatSellerInventories(data);
-        })
+        }),
     );
 
     server.registerTool(
         "get_copy_details",
         {
             description:
-                "Full details for one listing: a numeric Discogs listing id or an eBay item id. " +
+                "Full details for one listing: a numeric Discogs listing id. " +
                 "Discogs copies include media and sleeve grading, ships-from country, seller rating, the seller's shipping policy and a link.",
             inputSchema: {
                 item_id: z.string(),
             },
         },
         safe(async ({ item_id }) => {
-            const data = await digger().copyDetails(item_id);
+            const data = await digger.copyDetails(item_id);
             return formatCopyDetails(data);
-        })
+        }),
     );
 
     return server;
 }
-
