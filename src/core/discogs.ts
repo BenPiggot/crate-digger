@@ -78,6 +78,45 @@ interface RawInventoryPage {
     pagination?: { pages?: number };
 }
 
+/** The `pagination` object Discogs returns on paginated endpoints. */
+interface RawPagination {
+    page?: number;
+    pages?: number;
+    items?: number;
+    per_page?: number;
+    urls?: { first?: string; prev?: string; next?: string; last?: string };
+}
+
+/** One pressing in GET /masters/{master_id}/versions. Lighter than a full RawRelease. */
+export interface RawVersion {
+    id: number;
+    title?: string;
+    /** One display string, e.g. 'Vinyl, LP, Album, Reissue'. */
+    format?: string;
+    /** Broad format groups, e.g. ["Vinyl"]. */
+    major_formats?: string[];
+    /** A single label name (not an array, unlike RawRelease.labels). */
+    label?: string;
+    catno?: string;
+    country?: string;
+    /** Release date as Discogs stores it: usually a year ("1977"), sometimes a full date. */
+    released?: string;
+    status?: string;
+    thumb?: string;
+    /** API URL of the full release, e.g. https://api.discogs.com/releases/1234. */
+    resource_url?: string;
+    stats?: {
+        community?: { in_collection?: number; in_wantlist?: number };
+        user?: { in_collection?: number; in_wantlist?: number };
+    };
+}
+
+/** One page of GET /masters/{master_id}/versions. */
+interface RawVersionsPage {
+    versions?: RawVersion[];
+    pagination?: RawPagination;
+}
+
 export type Params = Record<string, string | number | undefined>;
 
 export interface DiscogsClientOptions {
@@ -96,6 +135,14 @@ export interface SearchFilters {
     barcode?: string | undefined;
     /** Defaults to "Vinyl". Pass null to search all formats. */
     format?: string | null | undefined;
+    limit?: number | undefined;
+}
+
+export interface VersionFilters {
+    /** Defaults to "Vinyl". Pass null to search all formats. */
+    format?: string | null | undefined;
+    country?: string | undefined;
+    yearRange?: string | undefined;
     limit?: number | undefined;
 }
 
@@ -209,6 +256,17 @@ export class DiscogsClient {
 
     async getRelease(releaseId: number): Promise<Release> {
         return toRelease(await this.getRawRelease(releaseId));
+    }
+
+    async getVersions(masterId: number, filters: VersionFilters = {}): Promise<Release[]> {
+        const { format, country, yearRange, limit = 100 } = filters;
+        const data = await this.get<RawSearch>(`/masters/${masterId}/versions`, {
+            per_page: limit,
+            format: format || undefined,
+            country: country || undefined,
+            year_range: yearRange || undefined,
+        });
+        return (data.results ?? []).map(toRelease);
     }
 
     async getMarketStats(releaseId: number, currency = "USD"): Promise<MarketStats> {

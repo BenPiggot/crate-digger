@@ -194,9 +194,13 @@ export class CrateDigger {
   
         };
         const { release } = await this.marketOverview(releaseId);
-
+        const pressings = await this.discogs.getVersions(release.master_id ?? 0, {
+            format: options.format ?? null,
+            country: options.country ?? undefined,
+            yearRange: options.yearRange ?? undefined,
+        });
         return {
-            pressings: [],
+            pressings: pressingsWithMarketData,
         };
     }
 }
