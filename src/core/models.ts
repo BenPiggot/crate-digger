@@ -19,6 +19,7 @@ export interface Release {
     barcodes: string[];
     thumb: string | null;
     url: string | null;
+    master_id: number | null;
 }
 
 /** Discogs' aggregate marketplace numbers for a release. */

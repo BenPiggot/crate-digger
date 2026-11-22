@@ -265,5 +265,6 @@ export function toRelease(r: RawRelease): Release {
         barcodes: [...new Set(barcodes)],
         thumb: r.thumb ?? null,
         url: r.uri ?? null,
+        master_id: r.master_id ?? null,
     };
 }

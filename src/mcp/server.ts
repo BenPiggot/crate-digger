@@ -123,5 +123,44 @@ export function createServer(): McpServer {
         }),
     );
 
+    server.registerTool(
+        "find_pressings_for_sale",
+        {
+            description:
+                "Find all pressings for sale for a given release. Returns a list of copies with details such as price, condition, and seller information.",
+            inputSchema: {
+                release_id: z.number().int().min(1),
+                format: z.string().optional(),
+                country: z.string().optional(),
+                year_range: z.string().optional(),
+                max_price: z.number().optional(),
+                refresh: z.boolean().default(false),
+                limit: z.number().int().min(1).max(100).default(50),
+                with_details: z.boolean().default(true),
+            },
+        },
+        safe(async ({ release_id, max_price, format, country, year_range, refresh, limit, with_details }) => {
+            const data = await digger.findPressingsForSale(release_id, {
+                maxPrice: max_price,
+                format,
+                country,
+                yearRange: year_range,
+                refresh,
+                limit,
+                withDetails: with_details,
+            });
+            // PLACEHOLDER FOR NOW
+            return JSON.stringify(data);
+        }),
+    );
+
     return server;
 }
+
+
+// **Flow:**
+// 1. Get the master release. If you start from a release, take `master_id` from `GET /releases/{release_id}`.
+// 2. `GET /masters/{master_id}/versions` lists every pressing. It's paginated, so follow `pagination.pages`. Supports filters like `format` (e.g. Vinyl), `country` and `released`.
+// 3. For each pressing: `GET /marketplace/stats/{release_id}?curr_abbr=USD` returns `num_for_sale` and `lowest_price`.
+// 4. Filter: `num_for_sale > 0`, optional `max_price`, and optional format, country and year.
+// 5. Return one row per pressing: release id, label and catno, country, year, format, `num_for_sale`, `lowest_price`, and a link to `https://www.discogs.com/sell/release/{release_id}`.

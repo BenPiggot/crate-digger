@@ -9,7 +9,7 @@ import {
     scanSummary,
     uniqueSellers,
 } from "./inventory.js";
-import type { ListingSource, SearchOptions, SellerScanSummary } from "./listing-source.js";
+import type { FindPressingsForSaleSearchOptions, ListingSource, SearchOptions, SellerScanSummary } from "./listing-source.js";
 import type { Copy, MarketStats, Release, ReleaseSearchResult } from "./models.js";
 
 /** Bad input from a caller (the web layer maps it to HTTP 400). */
@@ -57,6 +57,20 @@ export type FindCopiesOptions = Partial<Omit<SearchOptions, "sellers" | "maxPric
     /** Defaults to the configured sellers. */
     sellers?: readonly string[] | null | undefined;
     maxPrice?: number | null | undefined;
+};
+
+export interface FindPressingsForSaleResult {
+    pressings: MarketOverview[];
+}
+
+export type FindPressingsForSaleOptions = Partial<SearchFilters> & {
+    country?: string | null | undefined;  
+    maxPrice?: number | null | undefined;
+    refresh?: boolean;
+    limit?: number;
+    withDetails?: boolean;
+    yearRange?: string | null | undefined;
+    format?: string | null | undefined;
 };
 
 export interface CrateDiggerDeps {
@@ -115,6 +129,7 @@ export class CrateDigger {
             limit: options.limit ?? 50,
             withDetails: options.withDetails ?? true,
             detailsLimit: options.detailsLimit ?? 20,
+
         };
         const { release, discogs_market } = await this.marketOverview(releaseId);
 
@@ -162,5 +177,26 @@ export class CrateDigger {
             },
             detail,
         );
+    }
+
+    async findPressingsForSale(
+        releaseId: number,
+        options: FindPressingsForSaleOptions = {},
+    ): Promise<FindPressingsForSaleResult> {
+        const opts: FindPressingsForSaleSearchOptions = {
+            refresh: options.refresh ?? false,
+            maxPrice: options.maxPrice ?? null,
+            format: options.format ?? null,
+            country: options.country ?? null,
+            yearRange: options.yearRange ?? null,
+            limit: options.limit ?? 50,
+            withDetails: options.withDetails ?? true,
+  
+        };
+        const { release } = await this.marketOverview(releaseId);
+
+        return {
+            pressings: [],
+        };
     }
 }

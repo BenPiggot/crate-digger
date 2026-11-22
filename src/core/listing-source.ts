@@ -18,6 +18,19 @@ export interface SearchOptions {
     detailsLimit: number;
 }
 
+export interface FindPressingsForSaleSearchOptions {
+    format: string | null;
+    country: string | null;
+    yearRange: string | null;
+    /** Rescan instead of using cached data. */
+    refresh: boolean;
+    maxPrice: number | null;
+    /** Max copies to ask the source for, where it supports a limit. */
+    limit: number;
+    withDetails: boolean;
+    
+}
+
 /** Per-seller scan summary, shown in the UI as "sellers_searched". */
 export interface SellerScanSummary {
     seller: string;
