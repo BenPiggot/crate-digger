@@ -1,4 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { expandHome } from "./inventory.js";
 
 interface Cached<T> {
     value: T;
@@ -13,12 +14,14 @@ export class FileCache<T> {
         private readonly dir: string,
         private readonly prefix: string, // "versions" or "stats"
         private readonly ttlMs: number,
-    ) {}
+    ) {
+        this.dir = expandHome(dir);
+    }
 
     private path(key: string | number): string { 
         return `${this.dir}/${this.prefix}_${key}.json`;
     }   
-       
+
     private async load(key: string | number): Promise<Cached<T> | null> {
         const remembered = this.memory.get(String(key));
         if (remembered) return remembered;
@@ -33,9 +36,15 @@ export class FileCache<T> {
     }
     private async save(key: string | number, value: T): Promise<void> {
         const cached: Cached<T> = { value, fetched_at: Date.now() };
-        this.memory.set(String(key), cached);
-        await writeFile(this.path(key), JSON.stringify(cached), "utf8");
+        try {
+           await mkdir(this.dir, { recursive: true });
+           await writeFile(this.path(key), JSON.stringify(cached), "utf8");
+        }
+        catch {
+            // caching is best-effort
+        }
     }
+
 
     /** Cached value if fresh; otherwise fetch, save and return it. Falls back to stale data if the fetch fails. */
     async getOrFetch(key: string | number, fetch: () => Promise<T>, refresh = false): Promise<T> {

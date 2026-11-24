@@ -1,5 +1,6 @@
 /** Core logic shared by the MCP server and the web UI. */
 
+import { FileCache } from "./cache.js";
 import type { Settings } from "./config.js";
 import { DiscogsClient, DiscogsError, type SearchFilters } from "./discogs.js";
 import {
@@ -11,6 +12,7 @@ import {
 } from "./inventory.js";
 import type { FindPressingsForSaleSearchOptions, ListingSource, SearchOptions, SellerScanSummary } from "./listing-source.js";
 import type { Copy, MarketStats, PressingForSale, Release, ReleaseSearchResult } from "./models.js";
+import { PressingsIndex } from "./pressings.js";
 // import { PressingsIndex } from "./pressings.js";
 
 /** Bad input from a caller (the web layer maps it to HTTP 400). */
@@ -79,14 +81,14 @@ export interface CrateDiggerDeps {
     inventory?: InventoryIndex;
     /** Defaults to Discogs seller inventories only. */
     sources?: ListingSource[];
-    // pressings?: PressingsIndex;
+    pressings?: PressingsIndex;
 }
 
 export class CrateDigger {
     readonly discogs: DiscogsClient;
     readonly inventory: InventoryIndex;
     readonly sources: readonly ListingSource[];
-    // readonly pressings: PressingsIndex;
+    readonly pressings: PressingsIndex;
 
     constructor(
         readonly settings: Settings,
@@ -101,7 +103,14 @@ export class CrateDigger {
                 maxPages: settings.maxInventoryPages,
             });
 
-
+        this.pressings = 
+            deps.pressings ??
+            new PressingsIndex(
+                this.discogs,
+                settings,
+                new FileCache(settings.cacheDir, "versions", settings.inventoryTtlHours * 3600 * 1000),
+                new FileCache(settings.cacheDir, "stats", settings.inventoryTtlHours * 3600 * 1000),
+            );
         this.sources = deps.sources ?? [
             new DiscogsInventorySource(this.discogs, this.inventory, settings.currency),
         ];
@@ -199,28 +208,24 @@ export class CrateDigger {
   
         };
         const { release } = await this.marketOverview(releaseId);
-        const versions = await this.discogs.getVersions(release.master_id ?? 0, {
-            format: options.format ?? null,
-            country: options.country ?? null,
-            released: options.released ?? null,
-        });
-
+        const versions = await this.pressings.versions(release.master_id ?? 0);
+        versions.sort((a, b) => (b?.stats?.community?.in_collection ?? 0) - (a?.stats?.community?.in_collection ?? 0));
         const pressings: PressingForSale[] = [];
         for (const [i, version] of versions.entries()) {
             let marketStats: MarketStats | null = null;
-            if (opts.withDetails && i < opts.limit) {
+            if (opts.withDetails && i < this.settings.maxPressingsChecked) {
                 try {
-                    marketStats = await this.discogs.getMarketStats(version.id, this.settings.currency);
+                    marketStats = await this.pressings.stats(version.id);
                 } catch (e) {
                     // Sold since the scan, or a transient error: keep the cached data.
                     if (!(e instanceof DiscogsError)) throw e;
                 }
             }
             pressings.push({
-                release: version,
+                release,
                 discogs_market: marketStats,
-                in_collection: null,
-                sell_url: version.url ?? "",
+                in_collection: version?.stats?.community?.in_collection ?? 0,
+                sell_url: `https://www.discogs.com/sell/release/${version.id}`,
             });
         }
 
