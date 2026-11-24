@@ -37,6 +37,7 @@ export class FileCache<T> {
     }
     private async save(key: string | number, value: T): Promise<void> {
         const cached: Cached<T> = { value, fetched_at: Date.now() };
+        this.memory.set(String(key), cached);
         try {
             await mkdir(this.dir, { recursive: true });
             await writeFile(this.path(key), JSON.stringify(cached), "utf8");

@@ -160,7 +160,6 @@ export function createServer(): McpServer {
                     limit,
                     withDetails: with_details,
                 });
-                // PLACEHOLDER FOR NOW
                 return formatPressingsForSale(data.pressings);
             },
         ),

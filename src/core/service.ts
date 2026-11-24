@@ -2,7 +2,13 @@
 
 import { FileCache } from "./cache.js";
 import type { Settings } from "./config.js";
-import { DiscogsClient, DiscogsError, type RawVersion, type SearchFilters } from "./discogs.js";
+import {
+    DiscogsClient,
+    DiscogsError,
+    toVersion,
+    type RawVersion,
+    type SearchFilters,
+} from "./discogs.js";
 import {
     DiscogsInventorySource,
     InventoryIndex,
@@ -116,9 +122,9 @@ export class CrateDigger {
                 new FileCache(
                     settings.cacheDir,
                     "versions",
-                    settings.inventoryTtlHours * 3600 * 1000,
+                    settings.versionsTtlHours * 3600 * 1000,
                 ),
-                new FileCache(settings.cacheDir, "stats", settings.inventoryTtlHours * 3600 * 1000),
+                new FileCache(settings.cacheDir, "stats", settings.statsTtlHours * 3600 * 1000),
             );
         this.sources = deps.sources ?? [
             new DiscogsInventorySource(this.discogs, this.inventory, settings.currency),
@@ -216,25 +222,26 @@ export class CrateDigger {
         };
         const { release } = await this.marketOverview(releaseId);
 
-        const rawVersions = await this.pressings.versions(release.master_id ?? 0);
+        const rawVersions = await this.pressings.versions(release.master_id ?? 0, opts);
         const candidates = rawVersions
             .filter((version) => this.matchesFilters(version, opts))
-            .sort(this.byInCollectionDesc.bind(this))
+            .sort((a, b) => this.byInCollectionDesc(a, b))
             .slice(0, this.settings.maxPressingsChecked);
 
         const pressings: PressingForSale[] = [];
-        for (const [i, version] of candidates.entries()) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        for (const [_, version] of candidates.entries()) {
             let marketStats: MarketStats | null = null;
-            if (opts.withDetails && i < this.settings.maxPressingsChecked) {
-                try {
-                    marketStats = await this.pressings.stats(version.id);
-                } catch (e) {
-                    // Sold since the scan, or a transient error: keep the cached data.
-                    if (!(e instanceof DiscogsError)) throw e;
-                }
+
+            try {
+                marketStats = await this.pressings.stats(version.id);
+            } catch (e) {
+                // Transient error: keep the cached data.
+                if (!(e instanceof DiscogsError)) throw e;
             }
+
             pressings.push({
-                release,
+                release: toVersion(version),
                 discogs_market: marketStats,
                 in_collection: version?.stats?.community?.in_collection ?? 0,
                 sell_url: `https://www.discogs.com/sell/release/${version.id}`,
@@ -244,8 +251,10 @@ export class CrateDigger {
         const forSale = pressings
             .filter((p) => (p.discogs_market?.num_for_sale ?? 0) > 0)
             .filter((p) => {
-                const price = p.discogs_market?.lowest_price;
-                return opts.maxPrice === null || price == null || price <= opts.maxPrice;
+                const lowestPrice = p.discogs_market?.lowest_price;
+                return (
+                    opts.maxPrice === null || lowestPrice == null || lowestPrice <= opts.maxPrice
+                );
             })
             .sort(
                 (a, b) =>
@@ -258,9 +267,9 @@ export class CrateDigger {
     }
 
     private matchesFilters(version: RawVersion, opts: FindPressingsForSaleSearchOptions): boolean {
-        if (opts.format && !(version.format === opts.format)) return false;
+        if (opts.format && !version.major_formats?.includes(opts.format)) return false;
         if (opts.country && !(version.country === opts.country)) return false;
-        if (opts.released && version.released !== opts.released) return false;
+        if (opts.released && version.released?.startsWith(opts.released)) return false;
         return true;
     }
 
