@@ -50,6 +50,21 @@ function make(http: ReturnType<typeof mockFetch>, overrides: Partial<Settings> =
     return new CrateDigger(settings, { discogs });
 }
 
+function version(id: number, country: string, released: string, formats: string[], inCollection: number) {
+    return {
+        id,
+        country,
+        released,
+        major_formats: formats,
+        format: formats.join(", "),
+        label: "Parlophone",
+        catno: `CAT-${id}`,
+        stats: { community: { in_collection: inCollection } },
+    };
+}
+
+
+
 function invListing(
     listingId: number,
     releaseId: number,
@@ -99,6 +114,34 @@ function mockListingDetails(http: ReturnType<typeof mockFetch>) {
                 stats: { rating: "99.6" },
                 shipping: "US Media Mail $5, ships in 2 days",
             },
+        });
+    });
+}
+
+function mockPressingsForSale(http: ReturnType<typeof mockFetch>) {
+    http.on("/releases/123", { ...RELEASE, master_id: 555 });
+    http.on("/masters/555/versions", {
+        pagination: { page: 1, pages: 1 },
+        versions: [
+            version(123, "UK", "1997", ["Vinyl"], 300),
+            version(201, "US", "1990", ["Vinyl"], 200),
+            version(202, "US", "1990-05-01", ["Vinyl"], 100), // full date: tests startsWith
+            version(203, "US", "1990", ["CD"], 50), // not vinyl: always filtered out
+            version(204, "Germany", "2016", ["Vinyl"], 10), // nothing for sale
+        ],
+    });
+    // [num_for_sale, lowest_price] per release
+    const stats: Record<string, [number, number | null]> = {
+        "123": [42, 55],
+        "201": [3, 80],
+        "202": [1, 150],
+        "204": [0, null],
+    };
+    return http.on(/^\/marketplace\/stats\/\d+$/, (url) => {
+        const [count, price] = stats[url.pathname.split("/").pop() ?? ""] ?? [0, null];
+        return json({
+            num_for_sale: count,
+            lowest_price: price === null ? null : { value: price, currency: "USD" },
         });
     });
 }
@@ -387,4 +430,33 @@ describe("copyDetails and refreshSellers", () => {
         expect(summaries[0]).toMatchObject({ listings_scanned: 3, from_cache: false, error: null });
         expect(inventory.calls).toHaveLength(2);
     });
+});
+
+describe("findPressingsForSale", () => {
+    it("returns pressings for sale, cheapest first", async () => {
+        const http = mockFetch();
+        mockPressingsForSale(http);
+        const pressingResult = await make(http).findPressingsForSale(123);
+        expect(pressingResult.pressings.map((p) => p.release.id)).toEqual([123, 201, 202]);
+        expect(pressingResult).toMatchObject({
+            checked: 4,
+            release_id: 123,
+            releases_for_sale: 1,
+            stats_failed: 0,
+            total_versions: 5,
+        });
+    });
+
+
+    it("applies country, year, and max price filters", async () => {
+        const http = mockFetch();
+        mockPressingsForSale(http);
+        const pressingResult = await make(http).findPressingsForSale(123, {
+            country: "US",
+            released: "1990",
+            maxPrice: 100,
+        });
+        expect(pressingResult.pressings.map((p) => p.release.id)).toEqual([201]);
+    });
+
 });

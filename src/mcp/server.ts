@@ -69,9 +69,10 @@ export function createServer(): McpServer {
         {
             description:
                 "List copies of a Discogs release for sale, with price, condition and shipping terms. " +
+                "It only searches the given sellers' inventories, not all of Discogs. " +
                 "Sources: the public inventories of the given Discogs `sellers` (usernames, e.g. record stores; defaults to the configured list). " +
                 "Discogs copies are always the exact pressing and include media and sleeve grading, ships-from country, seller rating, the seller's shipping policy and a link. " +
-                "Set refresh=true to rescan inventories instead of using the cache. Exact matches are listed first, cheapest first.",
+                "Set refresh=true to rescan inventories instead of using the cache. Exact matches are listed first, cheapest first. ",
             inputSchema: {
                 release_id: z.number().int().min(1),
                 sellers: z.array(z.string()).optional(),
@@ -128,7 +129,8 @@ export function createServer(): McpServer {
         "find_pressings_for_sale",
         {
             description:
-                "Find all pressings for sale for a given release. Returns a list of copies with details such as price, condition, and seller information.",
+                "Find all pressings for sale for a given release. Returns a list of copies with details such as price, condition, and seller information. " +
+                "Per-copy details aren't available through the API, and that the link is where to see individual copies.",
             inputSchema: {
                 release_id: z.number().int().min(1),
                 format: z.string().optional(),
