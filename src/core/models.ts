@@ -52,7 +52,6 @@ export interface PressingForSale {
     sell_url: string;
 }
 
-
 /** One copy of a record for sale, from any listing source. */
 export interface Copy {
     source: string;

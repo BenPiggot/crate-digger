@@ -140,24 +140,34 @@ export function createServer(): McpServer {
                 with_details: z.boolean().default(true),
             },
         },
-        safe(async ({ release_id, max_price, format, country, year_range, refresh, limit, with_details }) => {
-            const data = await digger.findPressingsForSale(release_id, {
-                maxPrice: max_price,
+        safe(
+            async ({
+                release_id,
+                max_price,
                 format,
                 country,
-                released: year_range,
+                year_range,
                 refresh,
                 limit,
-                withDetails: with_details,
-            });
-            // PLACEHOLDER FOR NOW
-            return formatPressingsForSale(data.pressings);
-        }),
+                with_details,
+            }) => {
+                const data = await digger.findPressingsForSale(release_id, {
+                    maxPrice: max_price,
+                    format,
+                    country,
+                    released: year_range,
+                    refresh,
+                    limit,
+                    withDetails: with_details,
+                });
+                // PLACEHOLDER FOR NOW
+                return formatPressingsForSale(data.pressings);
+            },
+        ),
     );
 
     return server;
 }
-
 
 // **Flow:**
 // 1. Get the master release. If you start from a release, take `master_id` from `GET /releases/{release_id}`.

@@ -293,7 +293,11 @@ export class DiscogsClient {
     }
 
     /** Yield every version of a master release, 100 per request. */
-    async *iterVersions(masterId: number, filters: VersionFilters = {}, maxPages = 100): AsyncGenerator<RawVersion> {
+    async *iterVersions(
+        masterId: number,
+        filters: VersionFilters = {},
+        maxPages = 100,
+    ): AsyncGenerator<RawVersion> {
         // Only format and country are Discogs query params; yearRange and limit are applied by the caller.
         const { format = "Vinyl", country } = filters;
         for (let page = 1; page <= maxPages; page++) {

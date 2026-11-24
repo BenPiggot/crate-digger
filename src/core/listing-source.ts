@@ -28,7 +28,6 @@ export interface FindPressingsForSaleSearchOptions {
     /** Max copies to ask the source for, where it supports a limit. */
     limit: number;
     withDetails: boolean;
-
 }
 
 /** Per-seller scan summary, shown in the UI as "sellers_searched". */

@@ -2,7 +2,7 @@
 
 import { FileCache } from "./cache.js";
 import type { Settings } from "./config.js";
-import { DiscogsClient, DiscogsError, type SearchFilters } from "./discogs.js";
+import { DiscogsClient, DiscogsError, type RawVersion, type SearchFilters } from "./discogs.js";
 import {
     DiscogsInventorySource,
     InventoryIndex,
@@ -10,7 +10,12 @@ import {
     scanSummary,
     uniqueSellers,
 } from "./inventory.js";
-import type { FindPressingsForSaleSearchOptions, ListingSource, SearchOptions, SellerScanSummary } from "./listing-source.js";
+import type {
+    FindPressingsForSaleSearchOptions,
+    ListingSource,
+    SearchOptions,
+    SellerScanSummary,
+} from "./listing-source.js";
 import type { Copy, MarketStats, PressingForSale, Release, ReleaseSearchResult } from "./models.js";
 import { PressingsIndex } from "./pressings.js";
 // import { PressingsIndex } from "./pressings.js";
@@ -67,7 +72,7 @@ export interface FindPressingsForSaleResult {
 }
 
 export type FindPressingsForSaleOptions = Partial<SearchFilters> & {
-    country?: string | null | undefined;  
+    country?: string | null | undefined;
     maxPrice?: number | null | undefined;
     refresh?: boolean;
     limit?: number;
@@ -103,12 +108,16 @@ export class CrateDigger {
                 maxPages: settings.maxInventoryPages,
             });
 
-        this.pressings = 
+        this.pressings =
             deps.pressings ??
             new PressingsIndex(
                 this.discogs,
                 settings,
-                new FileCache(settings.cacheDir, "versions", settings.inventoryTtlHours * 3600 * 1000),
+                new FileCache(
+                    settings.cacheDir,
+                    "versions",
+                    settings.inventoryTtlHours * 3600 * 1000,
+                ),
                 new FileCache(settings.cacheDir, "stats", settings.inventoryTtlHours * 3600 * 1000),
             );
         this.sources = deps.sources ?? [
@@ -143,7 +152,6 @@ export class CrateDigger {
             limit: options.limit ?? 50,
             withDetails: options.withDetails ?? true,
             detailsLimit: options.detailsLimit ?? 20,
-
         };
         const { release, discogs_market } = await this.marketOverview(releaseId);
 
@@ -205,13 +213,17 @@ export class CrateDigger {
             released: options.released ?? null,
             limit: options.limit ?? 50,
             withDetails: options.withDetails ?? true,
-  
         };
         const { release } = await this.marketOverview(releaseId);
-        const versions = await this.pressings.versions(release.master_id ?? 0);
-        versions.sort((a, b) => (b?.stats?.community?.in_collection ?? 0) - (a?.stats?.community?.in_collection ?? 0));
+
+        const rawVersions = await this.pressings.versions(release.master_id ?? 0);
+        const candidates = rawVersions
+            .filter((version) => this.matchesFilters(version, opts))
+            .sort(this.byInCollectionDesc.bind(this))
+            .slice(0, this.settings.maxPressingsChecked);
+
         const pressings: PressingForSale[] = [];
-        for (const [i, version] of versions.entries()) {
+        for (const [i, version] of candidates.entries()) {
             let marketStats: MarketStats | null = null;
             if (opts.withDetails && i < this.settings.maxPressingsChecked) {
                 try {
@@ -229,8 +241,32 @@ export class CrateDigger {
             });
         }
 
+        const forSale = pressings
+            .filter((p) => (p.discogs_market?.num_for_sale ?? 0) > 0)
+            .filter((p) => {
+                const price = p.discogs_market?.lowest_price;
+                return opts.maxPrice === null || price == null || price <= opts.maxPrice;
+            })
+            .sort(
+                (a, b) =>
+                    (a.discogs_market?.lowest_price ?? Infinity) -
+                    (b.discogs_market?.lowest_price ?? Infinity),
+            );
         return {
-            pressings
+            pressings: forSale,
         };
+    }
+
+    private matchesFilters(version: RawVersion, opts: FindPressingsForSaleSearchOptions): boolean {
+        if (opts.format && !(version.format === opts.format)) return false;
+        if (opts.country && !(version.country === opts.country)) return false;
+        if (opts.released && version.released !== opts.released) return false;
+        return true;
+    }
+
+    private byInCollectionDesc(a: RawVersion, b: RawVersion): number {
+        return (
+            (b?.stats?.community?.in_collection ?? 0) - (a?.stats?.community?.in_collection ?? 0)
+        );
     }
 }

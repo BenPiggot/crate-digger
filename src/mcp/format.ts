@@ -1,5 +1,11 @@
 import type { SellerScanSummary } from "../core/listing-source.js";
-import type { Copy, MarketStats, PressingForSale, Release, ReleaseSearchResult } from "../core/models.js";
+import type {
+    Copy,
+    MarketStats,
+    PressingForSale,
+    Release,
+    ReleaseSearchResult,
+} from "../core/models.js";
 
 export function formatReleases(releases: ReleaseSearchResult[]): string {
     if (releases.length === 0) {
@@ -113,9 +119,7 @@ export function formatCopyDetails(copy: Copy): string {
     ].join("\n");
 }
 
-export function formatPressingsForSale(
-    pressings: PressingForSale[],
-): string {
+export function formatPressingsForSale(pressings: PressingForSale[]): string {
     if (pressings.length === 0) {
         return "No pressings for sale.";
     }
