@@ -36,6 +36,7 @@ export interface RawRelease {
     country?: string;
     labels?: { name?: string; catno?: string }[];
     formats?: { name?: string; descriptions?: string[] }[];
+    format?: string;
     identifiers?: { type?: string; value?: string }[];
     thumb?: string;
     uri?: string;
@@ -340,6 +341,7 @@ export function toRelease(r: RawRelease): Release {
         label: label?.name ?? null,
         catno: label?.catno ?? null,
         formats,
+        format_description: r.format ?? null,
         barcodes: [...new Set(barcodes)],
         thumb: r.thumb ?? null,
         url: r.uri ?? null,
@@ -357,6 +359,7 @@ export function toVersion(r: RawVersion): Release {
         label: r.label ?? null,
         catno: r.catno ?? null,
         formats: r.major_formats ?? [],
+        format_description: r.format ?? null,
         barcodes: [],
         thumb: r.thumb ?? null,
         url: r.resource_url ?? null,

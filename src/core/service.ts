@@ -75,6 +75,17 @@ export type FindCopiesOptions = Partial<Omit<SearchOptions, "sellers" | "maxPric
 
 export interface FindPressingsForSaleResult {
     pressings: PressingForSale[];
+    master_id: number | null;
+    releases_for_sale: number;
+    release_id: number | null;
+    /** Versions of this master on Discogs, all formats. */
+    total_versions: number;
+    /** Versions left after the format, country and year filters. */
+    matching_versions: number;
+    /** How many had their stats checked (capped by maxPressingsChecked). */
+    checked: number;
+    /** Stats requests that failed. */
+    stats_failed: number;
 }
 
 export type FindPressingsForSaleOptions = Partial<SearchFilters> & {
@@ -100,6 +111,8 @@ export class CrateDigger {
     readonly inventory: InventoryIndex;
     readonly sources: readonly ListingSource[];
     readonly pressings: PressingsIndex;
+
+    readonly VINYL = "VINYL";
 
     constructor(
         readonly settings: Settings,
@@ -261,13 +274,21 @@ export class CrateDigger {
                     (a.discogs_market?.lowest_price ?? Infinity) -
                     (b.discogs_market?.lowest_price ?? Infinity),
             );
+        const queriedReleasesForSale = forSale.filter((p) => p.release.id === releaseId).length;
         return {
             pressings: forSale,
+            master_id: release.master_id,
+            release_id: release.id,
+            releases_for_sale: queriedReleasesForSale,
+            total_versions: rawVersions.length,
+            matching_versions: candidates.length,
+            checked: pressings.length,
+            stats_failed: pressings.filter((p) => p.discogs_market === null).length,
         };
     }
 
     private matchesFilters(version: RawVersion, opts: FindPressingsForSaleSearchOptions): boolean {
-        if (opts.format && !version.major_formats?.includes(opts.format)) return false;
+        if (opts.format && !version.major_formats?.includes(this.VINYL)) return false;
         if (opts.country && !(version.country === opts.country)) return false;
         if (opts.released && version.released?.startsWith(opts.released)) return false;
         return true;

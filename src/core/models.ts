@@ -16,6 +16,7 @@ export interface Release {
     label: string | null;
     catno: string | null;
     formats: string[];
+    format_description: string | null;
     barcodes: string[];
     thumb: string | null;
     url: string | null;

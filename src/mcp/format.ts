@@ -2,10 +2,10 @@ import type { SellerScanSummary } from "../core/listing-source.js";
 import type {
     Copy,
     MarketStats,
-    PressingForSale,
     Release,
     ReleaseSearchResult,
 } from "../core/models.js";
+import type { FindPressingsForSaleResult } from "../core/service.js";
 
 export function formatReleases(releases: ReleaseSearchResult[]): string {
     if (releases.length === 0) {
@@ -119,7 +119,8 @@ export function formatCopyDetails(copy: Copy): string {
     ].join("\n");
 }
 
-export function formatPressingsForSale(pressings: PressingForSale[]): string {
+export function formatPressingsForSale(pressingsResult: FindPressingsForSaleResult): string {
+    const pressings = pressingsResult.pressings;
     if (pressings.length === 0) {
         return "No pressings for sale.";
     }
@@ -128,11 +129,29 @@ export function formatPressingsForSale(pressings: PressingForSale[]): string {
         [
             `Release ID: ${p.release.id}`,
             `Label: ${p.release.label ?? "?"} | Catno: ${p.release.catno ?? "?"}`,
-            `Country: ${p.release.country ?? "?"} | Year: ${p.release.year ?? "?"} | Format: ${p.release.formats.join(", ") ?? "?"}`,
-            `Copies for sale: ${p.discogs_market?.num_for_sale ?? "?"} | Lowest price: ${p.discogs_market?.lowest_price ?? "?"}`,
+            `Country: ${p.release.country ?? "?"} | Year: ${p.release.year ?? "?"} | Format:${[...p.release.formats, p.release.format_description].filter(Boolean).join(", ")}`,
+            `Copies for sale: ${p.discogs_market?.num_for_sale ?? "?"} | Lowest price: ${p.discogs_market?.lowest_price ?? "?"} ${p.discogs_market?.currency ?? ""}`,
             `Link: ${p.sell_url}`,
         ].join("\n"),
     );
 
-    return `${pressings.length} pressings for sale:\n${lines.join("\n\n")}`;
+    const r = pressingsResult;
+    const summary: string[] = [
+        `Master ${r.master_id ?? "?"} has ${r.total_versions} versions. ` +
+        `Checked ${r.checked} vinyl pressings; ${r.pressings.length} have copies for sale. ` +
+        `Release ${r.release_id ?? "?"} (the one you asked about) has ${r.releases_for_sale} versions for sale.`
+    ];
+
+    if (r.checked < r.matching_versions) {
+        summary.push(`Checked only the ${r.checked} most common of ${r.matching_versions} matching pressings.`);
+    }
+    if (r.stats_failed > 0) {
+        summary.push(`Stats failed for ${r.stats_failed} pressing${r.stats_failed === 1 ? "" : "s"}.`);
+    }
+
+    if (r.pressings.length === 0) {
+        return [...summary, "No pressings for sale."].join("\n");
+    }
+    
+    return `${summary.join("\n")}\n\n${lines.join("\n\n")}`;
 }

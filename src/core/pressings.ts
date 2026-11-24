@@ -25,7 +25,7 @@ export class PressingsIndex {
             masterId,
             async () => {
                 // Implementation for fetching versions goes here.
-                return this.collect(this.discogs.iterVersions(masterId, { format: null }));
+                return this.collect(this.discogs.iterVersions(masterId, { format: "Vinyl" }));
             },
             options.refresh ?? false,
         );
