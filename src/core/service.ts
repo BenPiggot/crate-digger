@@ -112,7 +112,7 @@ export class CrateDigger {
     readonly sources: readonly ListingSource[];
     readonly pressings: PressingsIndex;
 
-    readonly VINYL = "VINYL";
+    readonly VINYL = "Vinyl";
 
     constructor(
         readonly settings: Settings,
@@ -236,10 +236,10 @@ export class CrateDigger {
         const { release } = await this.marketOverview(releaseId);
 
         const rawVersions = await this.pressings.versions(release.master_id ?? 0, opts);
-        const candidates = rawVersions
+        const matching = rawVersions
             .filter((version) => this.matchesFilters(version, opts))
             .sort((a, b) => this.byInCollectionDesc(a, b))
-            .slice(0, this.settings.maxPressingsChecked);
+        const candidates = matching.slice(0, this.settings.maxPressingsChecked);
 
         const pressings: PressingForSale[] = [];
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -281,16 +281,17 @@ export class CrateDigger {
             release_id: release.id,
             releases_for_sale: queriedReleasesForSale,
             total_versions: rawVersions.length,
-            matching_versions: candidates.length,
+            matching_versions: matching.length,
             checked: pressings.length,
             stats_failed: pressings.filter((p) => p.discogs_market === null).length,
         };
     }
 
     private matchesFilters(version: RawVersion, opts: FindPressingsForSaleSearchOptions): boolean {
-        if (opts.format && !version.major_formats?.includes(this.VINYL)) return false;
+        const wanted = opts.format ?? this.VINYL;
+        if (!version.major_formats?.includes(wanted)) return false;
         if (opts.country && !(version.country === opts.country)) return false;
-        if (opts.released && version.released?.startsWith(opts.released)) return false;
+        if (opts.released && !version.released?.startsWith(opts.released)) return false;
         return true;
     }
 

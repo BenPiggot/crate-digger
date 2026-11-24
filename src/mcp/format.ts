@@ -121,15 +121,18 @@ export function formatCopyDetails(copy: Copy): string {
 
 export function formatPressingsForSale(pressingsResult: FindPressingsForSaleResult): string {
     const pressings = pressingsResult.pressings;
-    if (pressings.length === 0) {
-        return "No pressings for sale.";
-    }
-
+    console.error(`Pressings for sale: ${pressings.length}`);
+    console.error(`Total versions: ${pressingsResult.total_versions}`);
+    console.error(`Matching versions: ${pressingsResult.matching_versions}`);       
+    console.error(`Checked pressings: ${pressingsResult.checked}`);
+    console.error(`Stats failed: ${pressingsResult.stats_failed}`);
+    console.error(`Releases for sale: ${pressingsResult.releases_for_sale}`);
+    console.error(`Release ID: ${pressingsResult.release_id}`);
     const lines = pressings.map((p) =>
         [
             `Release ID: ${p.release.id}`,
             `Label: ${p.release.label ?? "?"} | Catno: ${p.release.catno ?? "?"}`,
-            `Country: ${p.release.country ?? "?"} | Year: ${p.release.year ?? "?"} | Format:${[...p.release.formats, p.release.format_description].filter(Boolean).join(", ")}`,
+            `Country: ${p.release.country ?? "?"} | Year: ${p.release.year ?? "?"} | Format: ${[...p.release.formats, p.release.format_description].filter(Boolean).join(", ")}`,
             `Copies for sale: ${p.discogs_market?.num_for_sale ?? "?"} | Lowest price: ${p.discogs_market?.lowest_price ?? "?"} ${p.discogs_market?.currency ?? ""}`,
             `Link: ${p.sell_url}`,
         ].join("\n"),
@@ -138,9 +141,14 @@ export function formatPressingsForSale(pressingsResult: FindPressingsForSaleResu
     const r = pressingsResult;
     const summary: string[] = [
         `Master ${r.master_id ?? "?"} has ${r.total_versions} versions. ` +
-        `Checked ${r.checked} vinyl pressings; ${r.pressings.length} have copies for sale. ` +
-        `Release ${r.release_id ?? "?"} (the one you asked about) has ${r.releases_for_sale} versions for sale.`
+        `Checked ${r.checked} vinyl pressings; ${r.pressings.length} have copies for sale. `
     ];
+
+    const asked = r.releases_for_sale > 0
+    console.error(`Releases for sale: ${r.releases_for_sale}`);
+    summary.push(asked
+        ? `Release ${r.release_id} (the one you asked about) has copies for sale.`
+        : `Release ${r.release_id} (the one you asked about) has no copies for sale.`);
 
     if (r.checked < r.matching_versions) {
         summary.push(`Checked only the ${r.checked} most common of ${r.matching_versions} matching pressings.`);
