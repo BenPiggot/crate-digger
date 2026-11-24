@@ -1,5 +1,5 @@
 import type { SellerScanSummary } from "../core/listing-source.js";
-import type { Copy, MarketStats, Release, ReleaseSearchResult } from "../core/models.js";
+import type { Copy, MarketStats, PressingForSale, Release, ReleaseSearchResult } from "../core/models.js";
 
 export function formatReleases(releases: ReleaseSearchResult[]): string {
     if (releases.length === 0) {
@@ -111,4 +111,24 @@ export function formatCopyDetails(copy: Copy): string {
         `Total: ${copy.total ?? "?"}`,
         `Link: ${copy.url ?? "?"}`,
     ].join("\n");
+}
+
+export function formatPressingsForSale(
+    pressings: PressingForSale[],
+): string {
+    if (pressings.length === 0) {
+        return "No pressings for sale.";
+    }
+
+    const lines = pressings.map((p) =>
+        [
+            `Release ID: ${p.release.id}`,
+            `Label: ${p.release.label ?? "?"} | Catno: ${p.release.catno ?? "?"}`,
+            `Country: ${p.release.country ?? "?"} | Year: ${p.release.year ?? "?"} | Format: ${p.release.formats.join(", ") ?? "?"}`,
+            `Copies for sale: ${p.discogs_market?.num_for_sale ?? "?"} | Lowest price: ${p.discogs_market?.lowest_price ?? "?"}`,
+            `Link: ${p.sell_url}`,
+        ].join("\n"),
+    );
+
+    return `${pressings.length} pressings for sale:\n${lines.join("\n\n")}`;
 }

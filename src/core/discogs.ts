@@ -126,6 +126,7 @@ export interface DiscogsClientOptions {
     minIntervalMs?: number;
     maxRetries?: number;
     timeoutMs?: number;
+    maxPages?: number;
 }
 
 export interface SearchFilters {
@@ -141,8 +142,8 @@ export interface SearchFilters {
 export interface VersionFilters {
     /** Defaults to "Vinyl". Pass null to search all formats. */
     format?: string | null | undefined;
-    country?: string | undefined;
-    yearRange?: string | undefined;
+    country?: string | null | undefined;
+    released?: string | null | undefined;
     limit?: number | undefined;
 }
 
@@ -158,6 +159,7 @@ export class DiscogsClient {
     private readonly minIntervalMs: number;
     private readonly maxRetries: number;
     private readonly timeoutMs: number;
+    private readonly maxPages: number;
     /** Time (ms, performance.now clock) the most recently scheduled request may start. */
     private nextSlot = 0;
 
@@ -172,6 +174,7 @@ export class DiscogsClient {
         this.minIntervalMs = options.minIntervalMs ?? (token ? 1000 : 2400);
         this.maxRetries = options.maxRetries ?? 3;
         this.timeoutMs = options.timeoutMs ?? 20_000;
+        this.maxPages = options.maxPages ?? 100;
     }
 
     /**
@@ -259,14 +262,11 @@ export class DiscogsClient {
     }
 
     async getVersions(masterId: number, filters: VersionFilters = {}): Promise<Release[]> {
-        const { format, country, yearRange, limit = 100 } = filters;
-        const data = await this.get<RawSearch>(`/masters/${masterId}/versions`, {
-            per_page: limit,
-            format: format || undefined,
-            country: country || undefined,
-            year_range: yearRange || undefined,
-        });
-        return (data.results ?? []).map(toRelease);
+        const versions: Release[] = [];
+        for await (const raw of this.iterVersions(masterId, filters, this.maxPages)) {
+            versions.push(toVersion(raw));
+        }
+        return versions;
     }
 
     async getMarketStats(releaseId: number, currency = "USD"): Promise<MarketStats> {
@@ -288,6 +288,22 @@ export class DiscogsClient {
                 { status: "For Sale", per_page: 100, page, sort: "listed", sort_order: "desc" },
             );
             yield* data.listings ?? [];
+            if (page >= (data.pagination?.pages ?? 1)) return;
+        }
+    }
+
+    /** Yield every version of a master release, 100 per request. */
+    async *iterVersions(masterId: number, filters: VersionFilters = {}, maxPages = 100): AsyncGenerator<RawVersion> {
+        // Only format and country are Discogs query params; yearRange and limit are applied by the caller.
+        const { format = "Vinyl", country } = filters;
+        for (let page = 1; page <= maxPages; page++) {
+            const data = await this.get<RawVersionsPage>(`/masters/${masterId}/versions`, {
+                format: format ?? undefined,
+                country: country ?? undefined,
+                per_page: 100,
+                page,
+            });
+            yield* data.versions ?? [];
             if (page >= (data.pagination?.pages ?? 1)) return;
         }
     }
@@ -324,5 +340,22 @@ export function toRelease(r: RawRelease): Release {
         thumb: r.thumb ?? null,
         url: r.uri ?? null,
         master_id: r.master_id ?? null,
+    };
+}
+
+export function toVersion(r: RawVersion): Release {
+    return {
+        id: r.id,
+        title: r.title ?? "",
+        artist: "",
+        year: r.released ? Number(r.released.slice(0, 4)) : null,
+        country: r.country ?? null,
+        label: r.label ?? null,
+        catno: r.catno ?? null,
+        formats: r.major_formats ?? [],
+        barcodes: [],
+        thumb: r.thumb ?? null,
+        url: r.resource_url ?? null,
+        master_id: null,
     };
 }

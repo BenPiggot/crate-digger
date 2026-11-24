@@ -8,6 +8,7 @@ import {
     formatMarketOverview,
     formatSellerInventories,
     formatCopyDetails,
+    formatPressingsForSale,
 } from "./format.js";
 import { safe } from "./clean.js";
 
@@ -144,13 +145,13 @@ export function createServer(): McpServer {
                 maxPrice: max_price,
                 format,
                 country,
-                yearRange: year_range,
+                released: year_range,
                 refresh,
                 limit,
                 withDetails: with_details,
             });
             // PLACEHOLDER FOR NOW
-            return JSON.stringify(data);
+            return formatPressingsForSale(data.pressings);
         }),
     );
 

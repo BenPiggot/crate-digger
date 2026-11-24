@@ -41,6 +41,18 @@ export interface ReleaseSearchResult {
     thumb: string | null;
 }
 
+/** One pressing of a master, with its Discogs marketplace numbers. */
+export interface PressingForSale {
+    release: Release;
+    /** null if the stats request failed for this pressing. */
+    discogs_market: MarketStats | null;
+    /** How many Discogs users own it; useful for ranking common pressings first. */
+    in_collection: number | null;
+    /** Discogs marketplace page listing every copy of this pressing for sale. */
+    sell_url: string;
+}
+
+
 /** One copy of a record for sale, from any listing source. */
 export interface Copy {
     source: string;

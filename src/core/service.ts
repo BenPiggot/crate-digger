@@ -1,7 +1,7 @@
 /** Core logic shared by the MCP server and the web UI. */
 
 import type { Settings } from "./config.js";
-import { DiscogsClient, type SearchFilters } from "./discogs.js";
+import { DiscogsClient, DiscogsError, type SearchFilters } from "./discogs.js";
 import {
     DiscogsInventorySource,
     InventoryIndex,
@@ -10,7 +10,7 @@ import {
     uniqueSellers,
 } from "./inventory.js";
 import type { FindPressingsForSaleSearchOptions, ListingSource, SearchOptions, SellerScanSummary } from "./listing-source.js";
-import type { Copy, MarketStats, Release, ReleaseSearchResult } from "./models.js";
+import type { Copy, MarketStats, PressingForSale, Release, ReleaseSearchResult } from "./models.js";
 
 /** Bad input from a caller (the web layer maps it to HTTP 400). */
 export class InvalidInputError extends Error {
@@ -60,7 +60,7 @@ export type FindCopiesOptions = Partial<Omit<SearchOptions, "sellers" | "maxPric
 };
 
 export interface FindPressingsForSaleResult {
-    pressings: MarketOverview[];
+    pressings: PressingForSale[];
 }
 
 export type FindPressingsForSaleOptions = Partial<SearchFilters> & {
@@ -69,7 +69,7 @@ export type FindPressingsForSaleOptions = Partial<SearchFilters> & {
     refresh?: boolean;
     limit?: number;
     withDetails?: boolean;
-    yearRange?: string | null | undefined;
+    released?: string | null | undefined;
     format?: string | null | undefined;
 };
 
@@ -188,19 +188,39 @@ export class CrateDigger {
             maxPrice: options.maxPrice ?? null,
             format: options.format ?? null,
             country: options.country ?? null,
-            yearRange: options.yearRange ?? null,
+            released: options.released ?? null,
             limit: options.limit ?? 50,
             withDetails: options.withDetails ?? true,
   
         };
         const { release } = await this.marketOverview(releaseId);
-        const pressings = await this.discogs.getVersions(release.master_id ?? 0, {
+        const versions = await this.discogs.getVersions(release.master_id ?? 0, {
             format: options.format ?? null,
-            country: options.country ?? undefined,
-            yearRange: options.yearRange ?? undefined,
+            country: options.country ?? null,
+            released: options.released ?? null,
         });
+
+        const pressings: PressingForSale[] = [];
+        for (const [i, version] of versions.entries()) {
+            let marketStats: MarketStats | null = null;
+            if (opts.withDetails && i < opts.limit) {
+                try {
+                    marketStats = await this.discogs.getMarketStats(version.id, this.settings.currency);
+                } catch (e) {
+                    // Sold since the scan, or a transient error: keep the cached data.
+                    if (!(e instanceof DiscogsError)) throw e;
+                }
+            }
+            pressings.push({
+                release: version,
+                discogs_market: marketStats,
+                in_collection: null,
+                sell_url: version.url ?? "",
+            });
+        }
+
         return {
-            pressings: pressingsWithMarketData,
+            pressings
         };
     }
 }
