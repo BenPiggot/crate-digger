@@ -238,7 +238,7 @@ export class CrateDigger {
         const rawVersions = await this.pressings.versions(release.master_id ?? 0, opts);
         const matching = rawVersions
             .filter((version) => this.matchesFilters(version, opts))
-            .sort((a, b) => this.byInCollectionDesc(a, b))
+            .sort((a, b) => this.byInCollectionDesc(a, b));
         const candidates = matching.slice(0, this.settings.maxPressingsChecked);
 
         const pressings: PressingForSale[] = [];

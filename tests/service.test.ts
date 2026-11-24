@@ -50,7 +50,13 @@ function make(http: ReturnType<typeof mockFetch>, overrides: Partial<Settings> =
     return new CrateDigger(settings, { discogs });
 }
 
-function version(id: number, country: string, released: string, formats: string[], inCollection: number) {
+function version(
+    id: number,
+    country: string,
+    released: string,
+    formats: string[],
+    inCollection: number,
+) {
     return {
         id,
         country,
@@ -62,8 +68,6 @@ function version(id: number, country: string, released: string, formats: string[
         stats: { community: { in_collection: inCollection } },
     };
 }
-
-
 
 function invListing(
     listingId: number,
@@ -447,7 +451,6 @@ describe("findPressingsForSale", () => {
         });
     });
 
-
     it("applies country, year, and max price filters", async () => {
         const http = mockFetch();
         mockPressingsForSale(http);
@@ -458,5 +461,4 @@ describe("findPressingsForSale", () => {
         });
         expect(pressingResult.pressings.map((p) => p.release.id)).toEqual([201]);
     });
-
 });

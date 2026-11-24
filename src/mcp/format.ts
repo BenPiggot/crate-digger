@@ -1,10 +1,5 @@
 import type { SellerScanSummary } from "../core/listing-source.js";
-import type {
-    Copy,
-    MarketStats,
-    Release,
-    ReleaseSearchResult,
-} from "../core/models.js";
+import type { Copy, MarketStats, Release, ReleaseSearchResult } from "../core/models.js";
 import type { FindPressingsForSaleResult } from "../core/service.js";
 
 export function formatReleases(releases: ReleaseSearchResult[]): string {
@@ -123,7 +118,7 @@ export function formatPressingsForSale(pressingsResult: FindPressingsForSaleResu
     const pressings = pressingsResult.pressings;
     console.error(`Pressings for sale: ${pressings.length}`);
     console.error(`Total versions: ${pressingsResult.total_versions}`);
-    console.error(`Matching versions: ${pressingsResult.matching_versions}`);       
+    console.error(`Matching versions: ${pressingsResult.matching_versions}`);
     console.error(`Checked pressings: ${pressingsResult.checked}`);
     console.error(`Stats failed: ${pressingsResult.stats_failed}`);
     console.error(`Releases for sale: ${pressingsResult.releases_for_sale}`);
@@ -141,25 +136,31 @@ export function formatPressingsForSale(pressingsResult: FindPressingsForSaleResu
     const r = pressingsResult;
     const summary: string[] = [
         `Master ${r.master_id ?? "?"} has ${r.total_versions} versions. ` +
-        `Checked ${r.checked} vinyl pressings; ${r.pressings.length} have copies for sale. `
+            `Checked ${r.checked} vinyl pressings; ${r.pressings.length} have copies for sale. `,
     ];
 
-    const asked = r.releases_for_sale > 0
+    const asked = r.releases_for_sale > 0;
     console.error(`Releases for sale: ${r.releases_for_sale}`);
-    summary.push(asked
-        ? `Release ${r.release_id} (the one you asked about) has copies for sale.`
-        : `Release ${r.release_id} (the one you asked about) has no copies for sale.`);
+    summary.push(
+        asked
+            ? `Release ${r.release_id} (the one you asked about) has copies for sale.`
+            : `Release ${r.release_id} (the one you asked about) has no copies for sale.`,
+    );
 
     if (r.checked < r.matching_versions) {
-        summary.push(`Checked only the ${r.checked} most common of ${r.matching_versions} matching pressings.`);
+        summary.push(
+            `Checked only the ${r.checked} most common of ${r.matching_versions} matching pressings.`,
+        );
     }
     if (r.stats_failed > 0) {
-        summary.push(`Stats failed for ${r.stats_failed} pressing${r.stats_failed === 1 ? "" : "s"}.`);
+        summary.push(
+            `Stats failed for ${r.stats_failed} pressing${r.stats_failed === 1 ? "" : "s"}.`,
+        );
     }
 
     if (r.pressings.length === 0) {
         return [...summary, "No pressings for sale."].join("\n");
     }
-    
+
     return `${summary.join("\n")}\n\n${lines.join("\n\n")}`;
 }
