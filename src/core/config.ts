@@ -8,8 +8,11 @@ export interface Settings {
     readonly discogsSellers: readonly string[];
     readonly cacheDir: string;
     readonly inventoryTtlHours: number;
+    readonly versionsTtlHours: number;
+    readonly statsTtlHours: number;
     /** 100 listings per page. */
     readonly maxInventoryPages: number;
+    readonly maxPressingsChecked: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -20,6 +23,9 @@ export const DEFAULT_SETTINGS: Settings = {
     cacheDir: "~/.cache/crate-digger",
     inventoryTtlHours: 12,
     maxInventoryPages: 100,
+    statsTtlHours: 3,
+    versionsTtlHours: 24,
+    maxPressingsChecked: 25,
 };
 
 /** Build settings for tests or callers that don't read the environment. */
@@ -71,6 +77,21 @@ export function settingsFromEnv(
             env.MAX_INVENTORY_PAGES,
             DEFAULT_SETTINGS.maxInventoryPages,
             "MAX_INVENTORY_PAGES",
+        ),
+        versionsTtlHours: numberFrom(
+            env.VERSIONS_TTL_HOURS,
+            DEFAULT_SETTINGS.versionsTtlHours,
+            "VERSIONS_TTL_HOURS",
+        ),
+        statsTtlHours: numberFrom(
+            env.STATS_TTL_HOURS,
+            DEFAULT_SETTINGS.statsTtlHours,
+            "STATS_TTL_HOURS",
+        ),
+        maxPressingsChecked: numberFrom(
+            env.MAX_PRESSINGS_CHECKED,
+            DEFAULT_SETTINGS.maxPressingsChecked,
+            "MAX_PRESSINGS_CHECKED",
         ),
     };
 }

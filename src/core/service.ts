@@ -11,6 +11,7 @@ import {
 } from "./inventory.js";
 import type { FindPressingsForSaleSearchOptions, ListingSource, SearchOptions, SellerScanSummary } from "./listing-source.js";
 import type { Copy, MarketStats, PressingForSale, Release, ReleaseSearchResult } from "./models.js";
+// import { PressingsIndex } from "./pressings.js";
 
 /** Bad input from a caller (the web layer maps it to HTTP 400). */
 export class InvalidInputError extends Error {
@@ -78,12 +79,14 @@ export interface CrateDiggerDeps {
     inventory?: InventoryIndex;
     /** Defaults to Discogs seller inventories only. */
     sources?: ListingSource[];
+    // pressings?: PressingsIndex;
 }
 
 export class CrateDigger {
     readonly discogs: DiscogsClient;
     readonly inventory: InventoryIndex;
     readonly sources: readonly ListingSource[];
+    // readonly pressings: PressingsIndex;
 
     constructor(
         readonly settings: Settings,
@@ -97,6 +100,8 @@ export class CrateDigger {
                 ttlMs: settings.inventoryTtlHours * 3600 * 1000,
                 maxPages: settings.maxInventoryPages,
             });
+
+
         this.sources = deps.sources ?? [
             new DiscogsInventorySource(this.discogs, this.inventory, settings.currency),
         ];
