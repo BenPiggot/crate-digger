@@ -12,10 +12,10 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
-from .crate_digger.config import Settings
-from .crate_digger.discogs import DiscogsError
-from .crate_digger.ebay import EbayError
-from .crate_digger.service import CrateDigger
+from .config import Settings
+from .discogs import DiscogsError
+from .ebay import EbayError
+from .service import CrateDigger
 
 STATIC = Path(__file__).parent / "static"
 
