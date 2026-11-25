@@ -9,7 +9,7 @@ from crate_digger.config import Settings
 from crate_digger.discogs import DiscogsClient
 from crate_digger.service import CrateDigger, catno_in_title, keywords_for
 from crate_digger.models import Release
-from crate_digger.web import create_app
+from web import create_app
 
 D = "https://api.discogs.com"
 E = "https://api.ebay.com"

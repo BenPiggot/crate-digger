@@ -270,7 +270,7 @@ describe("findCopies over seller inventories", () => {
             ships_from: "United States",
             shipping_type: "SELLER_POLICY",
         });
-        expect(out.sellers_searched[0]).toMatchObject({ listings_scanned: 3, from_cache: false });
+        expect(out.sellers_searched?.[0]).toMatchObject({ listings_scanned: 3, from_cache: false });
         expect(out.note).toMatch(/Searched 1 Discogs seller inventory;/);
     });
 
@@ -281,7 +281,7 @@ describe("findCopies over seller inventories", () => {
             withDetails: false,
         });
         expect(out.count).toBe(2);
-        expect(out.sellers_searched[0]?.seller).toBe("shop_a");
+        expect(out.sellers_searched?.[0]?.seller).toBe("shop_a");
     });
 
     it("filters by max price", async () => {
@@ -306,7 +306,7 @@ describe("findCopies over seller inventories", () => {
         const second = make(http); // new instance: reads the on-disk cache
         const out = await second.findCopies(123, opts);
         expect(inventory.calls).toHaveLength(2);
-        expect(out.sellers_searched[0]?.from_cache).toBe(true);
+        expect(out.sellers_searched?.[0]?.from_cache).toBe(true);
         expect(out.count).toBe(2);
 
         await second.findCopies(123, { ...opts, refresh: true });
@@ -329,7 +329,7 @@ describe("findCopies over seller inventories", () => {
             withDetails: false,
         });
         expect(out.copies.map((c) => c.item_id)).toEqual(["7"]);
-        expect(out.sellers_searched[0]?.from_cache).toBe(true);
+        expect(out.sellers_searched?.[0]?.from_cache).toBe(true);
     });
 
     it("serves a stale scan when a refresh fails", async () => {
@@ -347,7 +347,7 @@ describe("findCopies over seller inventories", () => {
             withDetails: false,
         });
         expect(out.count).toBe(1);
-        expect(out.sellers_searched[0]?.error).toMatch(/Refresh failed, using older scan/);
+        expect(out.sellers_searched?.[0]?.error).toMatch(/Refresh failed, using older scan/);
     });
 
     it("reports an unknown seller without failing the search", async () => {
@@ -361,7 +361,7 @@ describe("findCopies over seller inventories", () => {
             sellers: ["nobody", "recordstore"],
             withDetails: false,
         });
-        expect(out.sellers_searched[0]?.error).toMatch(/Not found/);
+        expect(out.sellers_searched?.[0]?.error).toMatch(/Not found/);
         expect(out.count).toBe(2);
     });
 

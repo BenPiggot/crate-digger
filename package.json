@@ -13,6 +13,8 @@
         "start": "node --env-file-if-exists=.env dist/index.js",
         "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
         "mcp": "node --env-file-if-exists=.env dist/mcp.js",
+        "web": "node --env-file-if-exists=.env dist/web.js",
+        "dev:web": "tsx watch --env-file-if-exists=.env src/web.ts",
         "typecheck": "tsc --noEmit",
         "lint": "eslint .",
         "format": "prettier --write .",
@@ -34,6 +36,7 @@
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.2",
+        "fastify": "^5.12.8",
         "zod": "^4.6.7"
     }
 }
