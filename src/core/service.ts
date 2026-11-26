@@ -23,8 +23,9 @@ import type {
     SellerScanSummary,
 } from "./listing-source.js";
 import type { Copy, MarketStats, PressingForSale, PressingTarget, Release, ReleaseSearchResult } from "./models.js";
-import type { Candidate, PressingClues } from "./identify.js";
+import { PressingIdentifier, type Candidate, type PressingClues } from "./identify.js";
 import { prefilter, PressingsIndex } from "./pressings.js";
+import { normalizeCode } from "./utils/text.js";
 // import { PressingsIndex } from "./pressings.js";
 
 /** Bad input from a caller (the web layer maps it to HTTP 400). */
@@ -32,7 +33,6 @@ export class InvalidInputError extends Error {
     override name = "InvalidInputError";
 }
 
-const norm = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /**
  * True if the catalog number (ignoring spaces, dashes and case) appears in the title.
@@ -40,7 +40,7 @@ const norm = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]/g, 
  */
 export function catnoInTitle(catno: string | null | undefined, title: string): boolean {
     if (!catno || catno.toLowerCase() === "none") return false;
-    return norm(title).includes(norm(catno));
+    return normalizeCode(title).includes(normalizeCode(catno));
 }
 
 /** Artist + title search keywords. Discogs appends "(2)" etc. to disambiguate artists; sellers don't. */
@@ -105,6 +105,7 @@ export interface CrateDiggerDeps {
     /** Defaults to Discogs seller inventories only. */
     sources?: ListingSource[];
     pressings?: PressingsIndex;
+    identifier?: PressingIdentifier;
 }
 
 export class CrateDigger {
@@ -112,6 +113,7 @@ export class CrateDigger {
     readonly inventory: InventoryIndex;
     readonly sources: readonly ListingSource[];
     readonly pressings: PressingsIndex;
+    readonly identifier: PressingIdentifier;
 
     readonly VINYL = "Vinyl";
 
@@ -145,6 +147,7 @@ export class CrateDigger {
                     settings.versionsTtlHours * 3600 * 1000,
                 ),
             );
+        this.identifier = deps.identifier ?? new PressingIdentifier();
         this.sources = deps.sources ?? [
             new DiscogsInventorySource(this.discogs, this.inventory, settings.currency),
         ];

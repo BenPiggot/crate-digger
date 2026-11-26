@@ -30,6 +30,14 @@ export interface FindPressingsForSaleSearchOptions {
     withDetails: boolean;
 }
 
+export interface PressingIdentification {
+    release: Release;
+    score: number;
+    matched: string[];
+    conflicts: string[];    
+    runouts: string[];
+}
+
 /** Per-seller scan summary, shown in the UI as "sellers_searched". */
 export interface SellerScanSummary {
     seller: string;

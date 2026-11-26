@@ -116,13 +116,6 @@ export function formatCopyDetails(copy: Copy): string {
 
 export function formatPressingsForSale(pressingsResult: FindPressingsForSaleResult): string {
     const pressings = pressingsResult.pressings;
-    console.error(`Pressings for sale: ${pressings.length}`);
-    console.error(`Total versions: ${pressingsResult.total_versions}`);
-    console.error(`Matching versions: ${pressingsResult.matching_versions}`);
-    console.error(`Checked pressings: ${pressingsResult.checked}`);
-    console.error(`Stats failed: ${pressingsResult.stats_failed}`);
-    console.error(`Releases for sale: ${pressingsResult.releases_for_sale}`);
-    console.error(`Release ID: ${pressingsResult.release_id}`);
     const lines = pressings.map((p) =>
         [
             `Release ID: ${p.release.id}`,
@@ -140,7 +133,7 @@ export function formatPressingsForSale(pressingsResult: FindPressingsForSaleResu
     ];
 
     const asked = r.releases_for_sale > 0;
-    console.error(`Releases for sale: ${r.releases_for_sale}`);
+
     summary.push(
         asked
             ? `Release ${r.release_id} (the one you asked about) has copies for sale.`
@@ -164,3 +157,20 @@ export function formatPressingsForSale(pressingsResult: FindPressingsForSaleResu
 
     return `${summary.join("\n")}\n\n${lines.join("\n\n")}`;
 }
+
+// export function formatPressingIdentification(identification: PressingIdentification | null): string {
+//     if (!identification) {
+//         return "Pressing not found.";
+//     }
+
+//     return [
+//         `Release ID: ${identification.release.id}`,
+//         `Title: ${identification.release.title}`,
+//         `Artist: ${identification.release.artist ?? "?"}`,
+//         `Format: ${[...identification.release.formats, identification.release.format_description].filter(Boolean).join(", ")}`,
+//         `Country: ${identification.release.country ?? "?"} | Year: ${identification.release.year ?? "?"}`,
+//         `Label: ${identification.release.label ?? "?"} | Catno: ${identification.release.catno ?? "?"}`,
+//         `Link: ${identification.sell_url}`,
+//     ].join("\n");
+// }
+

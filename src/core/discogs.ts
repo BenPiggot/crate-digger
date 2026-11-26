@@ -37,7 +37,8 @@ export interface RawRelease {
     labels?: { name?: string; catno?: string }[];
     formats?: { name?: string; descriptions?: string[] }[];
     format?: string;
-    identifiers?: { type?: string; value?: string }[];
+    identifiers?: { type?: string; value?: string, description?: string }[];
+    notes?: string;
     thumb?: string;
     uri?: string;
     master_id?: number;

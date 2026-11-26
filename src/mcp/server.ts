@@ -189,7 +189,8 @@ export function createServer(): McpServer {
             const target = master_id ? { masterId: master_id } : { releaseId: release_id };
             const clues = { format , country, year, label, catno, barcode, runout, details };
             const data = await digger.identifyPressing(target, clues);
-            return formatReleaseDetails(data);
+            // JSON stringify is a placeholder, will be replaced with proper formatting later
+            return JSON.stringify(data);
         }),
     );
     return server;
