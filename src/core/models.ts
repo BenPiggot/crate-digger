@@ -112,3 +112,5 @@ export function emptyCopy(
         ...fields,
     };
 }
+
+export type PressingTarget = { masterId: number } | { releaseId: number };

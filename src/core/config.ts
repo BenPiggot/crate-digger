@@ -9,6 +9,7 @@ export interface Settings {
     readonly cacheDir: string;
     readonly inventoryTtlHours: number;
     readonly versionsTtlHours: number;
+    readonly releasesTtlHours: number;
     readonly statsTtlHours: number;
     /** 100 listings per page. */
     readonly maxInventoryPages: number;
@@ -25,6 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
     maxInventoryPages: 100,
     statsTtlHours: 3,
     versionsTtlHours: 24,
+    releasesTtlHours: 24,
     maxPressingsChecked: 25,
 };
 
@@ -87,6 +89,12 @@ export function settingsFromEnv(
             env.STATS_TTL_HOURS,
             DEFAULT_SETTINGS.statsTtlHours,
             "STATS_TTL_HOURS",
+        ),
+
+        releasesTtlHours: numberFrom(
+            env.RELEASES_TTL_HOURS,
+            DEFAULT_SETTINGS.releasesTtlHours,
+            "RELEASES_TTL_HOURS",
         ),
         maxPressingsChecked: numberFrom(
             env.MAX_PRESSINGS_CHECKED,

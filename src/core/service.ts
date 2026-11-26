@@ -22,8 +22,9 @@ import type {
     SearchOptions,
     SellerScanSummary,
 } from "./listing-source.js";
-import type { Copy, MarketStats, PressingForSale, Release, ReleaseSearchResult } from "./models.js";
-import { PressingsIndex } from "./pressings.js";
+import type { Copy, MarketStats, PressingForSale, PressingTarget, Release, ReleaseSearchResult } from "./models.js";
+import type { Candidate, PressingClues } from "./identify.js";
+import { prefilter, PressingsIndex } from "./pressings.js";
 // import { PressingsIndex } from "./pressings.js";
 
 /** Bad input from a caller (the web layer maps it to HTTP 400). */
@@ -138,6 +139,11 @@ export class CrateDigger {
                     settings.versionsTtlHours * 3600 * 1000,
                 ),
                 new FileCache(settings.cacheDir, "stats", settings.statsTtlHours * 3600 * 1000),
+                new FileCache(
+                    settings.cacheDir,
+                    "releases",
+                    settings.versionsTtlHours * 3600 * 1000,
+                ),
             );
         this.sources = deps.sources ?? [
             new DiscogsInventorySource(this.discogs, this.inventory, settings.currency),
@@ -235,7 +241,7 @@ export class CrateDigger {
         };
         const { release } = await this.marketOverview(releaseId);
 
-        const rawVersions = await this.pressings.versions(release.master_id ?? 0, opts);
+        const rawVersions = await this.pressings.versions(release.master_id ?? releaseId ?? 0, opts);
         const matching = rawVersions
             .filter((version) => this.matchesFilters(version, opts))
             .sort((a, b) => this.byInCollectionDesc(a, b));
@@ -299,5 +305,30 @@ export class CrateDigger {
         return (
             (b?.stats?.community?.in_collection ?? 0) - (a?.stats?.community?.in_collection ?? 0)
         );
+    }
+
+    async identifyPressing(target: PressingTarget, clues: PressingClues) {
+        const masterId = await this.masterIdFor(target);
+        const versions = await this.pressings.versions(masterId);
+        const filteredVersions = prefilter(versions, clues);
+
+        const details: Candidate[] = [];
+        for (const version of filteredVersions) {
+            try {
+                details.push({ version, release: (await this.pressings.releases(version.id)) });
+            } catch(e) {
+                if (!(e instanceof DiscogsError)) throw e;
+            }
+        }
+
+
+        return null;
+    }
+
+    private async masterIdFor(target: PressingTarget): Promise<number> {
+        if ("masterId" in target) return target.masterId;
+        const release = await this.discogs.getRelease(target.releaseId);
+        if (!release.master_id) throw new Error(`Release ${target.releaseId} has no master`);
+        return release.master_id;
     }
 }
