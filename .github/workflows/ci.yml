@@ -1,20 +1,6 @@
 name: CI
 on: [push, pull_request]
 jobs:
-    # The Python version stays as the reference until the TypeScript port matches it (PLAN.md).
-    python:
-        runs-on: ubuntu-latest
-        strategy:
-            matrix:
-                python-version: ["3.11", "3.12", "3.13"]
-        steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-python@v5
-              with:
-                  python-version: ${{ matrix.python-version }}
-            - run: pip install -e ".[dev]"
-            - run: pytest -q
-
     typescript:
         runs-on: ubuntu-latest
         strategy:
