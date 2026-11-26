@@ -34,7 +34,7 @@ export interface PressingIdentification {
     release: Release;
     score: number;
     matched: string[];
-    conflicts: string[];    
+    conflicts: string[];
     runouts: string[];
 }
 

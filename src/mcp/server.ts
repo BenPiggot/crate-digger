@@ -168,7 +168,7 @@ export function createServer(): McpServer {
     );
 
     server.registerTool(
-    "identify_pressing",
+        "identify_pressing",
         {
             description:
                 "Identify a pressing by its Discogs release id. Returns basic details such as title, artist, and format.",
@@ -185,13 +185,26 @@ export function createServer(): McpServer {
                 details: z.string().optional(),
             },
         },
-        safe(async ({ release_id, master_id, format, country, year, label, catno, barcode, runout, details }) => {
-            const target = master_id ? { masterId: master_id } : { releaseId: release_id };
-            const clues = { format , country, year, label, catno, barcode, runout, details };
-            const data = await digger.identifyPressing(target, clues);
-            // JSON stringify is a placeholder, will be replaced with proper formatting later
-            return JSON.stringify(data);
-        }),
+        safe(
+            async ({
+                release_id,
+                master_id,
+                format,
+                country,
+                year,
+                label,
+                catno,
+                barcode,
+                runout,
+                details,
+            }) => {
+                const target = master_id ? { masterId: master_id } : { releaseId: release_id };
+                const clues = { format, country, year, label, catno, barcode, runout, details };
+                const data = await digger.identifyPressing(target, clues);
+                // JSON stringify is a placeholder, will be replaced with proper formatting later
+                return JSON.stringify(data);
+            },
+        ),
     );
     return server;
 }

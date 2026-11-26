@@ -11,8 +11,8 @@ export function digitsOnly(text: string): string {
 /** Names and free text: keep letters and digits in any script, and drop accents. "Électro-Disques" → "electrodisques" */
 export function normalizeText(text: string): string {
     return text
-        .normalize("NFD")                    // split "É" into "E" + a combining accent mark
-        .replace(/\p{M}/gu, "")              // remove the accent marks
+        .normalize("NFD") // split "É" into "E" + a combining accent mark
+        .replace(/\p{M}/gu, "") // remove the accent marks
         .toLowerCase()
-        .replace(/[^\p{L}\p{N}]/gu, "");     // keep letters and digits from any script
+        .replace(/[^\p{L}\p{N}]/gu, ""); // keep letters and digits from any script
 }

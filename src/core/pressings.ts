@@ -55,8 +55,6 @@ export class PressingsIndex {
         );
     }
 
-
-
     private async collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {
         const results: T[] = [];
         for await (const item of iterable) {

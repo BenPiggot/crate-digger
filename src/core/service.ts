@@ -22,8 +22,15 @@ import type {
     SearchOptions,
     SellerScanSummary,
 } from "./listing-source.js";
-import type { Copy, MarketStats, PressingForSale, PressingTarget, Release, ReleaseSearchResult } from "./models.js";
-import { PressingIdentifier, type Candidate, type PressingClues } from "./identify.js";
+import type {
+    Copy,
+    MarketStats,
+    PressingForSale,
+    PressingTarget,
+    Release,
+    ReleaseSearchResult,
+} from "./models.js";
+import { PressingIdentifier, type Candidate, type PressingClues, type PressingMatch } from "./identify.js";
 import { prefilter, PressingsIndex } from "./pressings.js";
 import { normalizeCode } from "./utils/text.js";
 // import { PressingsIndex } from "./pressings.js";
@@ -32,7 +39,6 @@ import { normalizeCode } from "./utils/text.js";
 export class InvalidInputError extends Error {
     override name = "InvalidInputError";
 }
-
 
 /**
  * True if the catalog number (ignoring spaces, dashes and case) appears in the title.
@@ -98,6 +104,20 @@ export type FindPressingsForSaleOptions = Partial<SearchFilters> & {
     released?: string | null | undefined;
     format?: string | null | undefined;
 };
+
+export interface IdentityPressingResult {
+    master_id: number | null;
+    matches: PressingMatch[];
+    confident: boolean;
+    next_check: string | null;
+    total_versions: number;
+    /** Versions left after the format, country and year filters. */
+    matching_versions: number;  
+    /** How many had their stats checked (capped by maxPressingsChecked). */
+    checked: number;
+    /** Releases requests that failed. */
+    releases_failed: number;
+}
 
 export interface CrateDiggerDeps {
     discogs?: DiscogsClient;
@@ -244,7 +264,10 @@ export class CrateDigger {
         };
         const { release } = await this.marketOverview(releaseId);
 
-        const rawVersions = await this.pressings.versions(release.master_id ?? releaseId ?? 0, opts);
+        const rawVersions = await this.pressings.versions(
+            release.master_id ?? releaseId ?? 0,
+            opts,
+        );
         const matching = rawVersions
             .filter((version) => this.matchesFilters(version, opts))
             .sort((a, b) => this.byInCollectionDesc(a, b));
@@ -318,14 +341,35 @@ export class CrateDigger {
         const details: Candidate[] = [];
         for (const version of filteredVersions) {
             try {
-                details.push({ version, release: (await this.pressings.releases(version.id)) });
-            } catch(e) {
+                details.push({ version, release: await this.pressings.releases(version.id) });
+            } catch (e) {
                 if (!(e instanceof DiscogsError)) throw e;
             }
         }
 
+        const ranked = this.identifier.rank(clues, details);
+        const top = ranked.slice(0, 3);
+        const [first, second] = top;
+        const confident = this.identifier.isConfident(top);
 
-        return null;
+
+        return {
+            master_id: masterId,
+            matches: top.map((candidate) => ({
+                release_id: candidate.version.id,
+                score: candidate.score,
+                matched: candidate.matched,
+                conflicts: candidate.conflicts,
+            })),
+            confident,
+            next_check: (!confident && first !== undefined && second !== undefined)
+                ? this.identifier.distinguishingCheck(clues, first, second)
+                : null,
+            total_versions: versions.length,
+            matching_versions: filteredVersions.length,
+            checked: details.length,
+            releases_failed: versions.length - details.length,
+        };
     }
 
     private async masterIdFor(target: PressingTarget): Promise<number> {
