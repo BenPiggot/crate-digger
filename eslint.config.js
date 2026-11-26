@@ -1,10 +1,11 @@
 // @ts-check
+/// <reference types="node" />
 import eslint from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-    { ignores: ["dist/", "coverage/", "crate-digger-env/", ".venv/", "src/crate_digger/"] },
+    { ignores: ["dist/", "coverage/"] },
     eslint.configs.recommended,
     // Type-aware rules catch async mistakes such as un-awaited promises.
     ...tseslint.configs.recommendedTypeChecked,
