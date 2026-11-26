@@ -63,6 +63,7 @@ npm run build
 | `MAX_PRESSINGS_CHECKED`                                         | How many pressings `find_pressings_for_sale` checks, most common first (default 25)                          |
 | `CACHE_DIR`                                                     | Cache location (default `~/.cache/crate-digger`)                                                             |
 | `USER_AGENT`                                                    | User agent sent to Discogs                                                                                   |
+| `PORT`                                                          | Port for the web UI (default 8000)                                                                           |
 
 ## Run the web UI
 
