@@ -16,7 +16,8 @@
 | 4. Hybrid "every pressing" tool | **Ben**, Claude helps with core functions | Ben designs the tool's inputs and outputs |
 | 5. Web backend | Claude writes, Ben reviews | Same routes and response shapes so `index.html` keeps working |
 | 6. Releases without a master, and pressing identification | **Ben**, Claude helps with core functions | Ben designs the tool's inputs and outputs |
-| 7. Frontend | Optional, later | The plain `index.html` works as it is |
+| 7. Chat in the web app | **Ben**, Claude explains and reviews | The agent loop is the learning goal, so Ben writes it |
+| 8. Frontend | Optional, later | The plain `index.html` works as it is |
 
 **Notes for Claude Code:** for step 3, don't write the MCP server code. Explain concepts, point to the SDK docs and review Ben's code. The Python version stays in git history as a reference until the TypeScript version matches it.
 
@@ -139,6 +140,39 @@ Some releases (often obscure or one-off records) have no `master_id`. Today `fin
 
 **Constraints:** the same rate limit as step 4. Ranking 80 versions means up to 80 release lookups when not cached, so cap and prioritize candidates (most common first, using `in_collection`) and apply cheap filters (format, country, year, label) before fetching identifiers.
 
+## Step 7: chat in the web app
+
+**Purpose:** a chat panel in the web UI where you ask questions in plain language ("which pressings of this are for sale under $30?") and an LLM answers by calling crate-digger's tools, the same way Claude Desktop does through the MCP server.
+
+**Architecture:**
+
+```
+Browser chat  ->  POST /api/chat  ->  Fastify backend  ->  LLM API (with the tools)
+                                          ^                      |
+                                          +-- runs tool calls <--+
+```
+
+**Tools come from the MCP server, in-process.** The web backend acts as an MCP client to `createServer()` from `src/mcp/server.ts`, connected with the MCP SDK's in-memory transport (no subprocess, no network). It lists the tools from the server and calls them through it. The MCP server stays the single definition of every tool, so description fixes (like the step 4 follow-ups) improve Claude Desktop and the web chat at once. Don't define the tools a second time for the LLM API.
+
+**The agent loop (`src/web/chat.ts`):**
+1. Receive the conversation from the browser.
+2. Call the LLM API with the messages and the tool definitions converted from the MCP tool list.
+3. If the model asks for tools, call each one through the MCP client, append the results, and call the model again.
+4. Repeat until the model returns a final answer, with a cap on rounds (e.g. 10) so a confused model can't loop forever.
+
+**Streaming:** stream to the browser with server-sent events: a progress event when a tool starts ("Checking 5 pressings..."), since a cold `find_pressings_for_sale` takes about 30 seconds, then the answer text as it arrives.
+
+**State:** the browser keeps the message history and sends it with each request, so the server stays stateless.
+
+**Security and cost:**
+- The LLM API key lives in `.env` on the server, next to the Discogs token. The browser never sees it.
+- Each question can take several model calls (one per tool round trip). Fine for local use. If the app is ever deployed publicly, add authentication and usage limits first.
+- Tool results include text written by other people (seller comments, listing descriptions). Treat it as data in the system prompt, not instructions.
+
+**Before starting:** check the current docs for the LLM provider's SDK (tool use and streaming) and for the MCP SDK's client and in-memory transport. Both change often; don't rely on older tutorials.
+
+**Testing:** reuse the natural-language prompts from the step 4 testing, now run through the web chat, and add route tests that use `app.inject()` with a fake LLM client that returns scripted tool calls.
+
 ## Done when
 
 - [ ] All five existing MCP tools work in TypeScript and are tested in the MCP Inspector
@@ -147,4 +181,5 @@ Some releases (often obscure or one-off records) have no `master_id`. Today `fin
 - [ ] README updated: Discogs-first, TypeScript, new tool documented
 - [ ] Releases without a master handled in `find_pressings_for_sale`
 - [ ] `identify_pressing` works in Claude Desktop, with accuracy measured on a test set
+- [ ] Web chat answers questions by calling the tools, with streamed progress
 - [ ] Python code removed
