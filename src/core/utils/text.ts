@@ -27,3 +27,9 @@ export function missingValues(a: string[], b: string[], norm: (s: string) => str
     const inB = new Set(b.map(norm)); // normalize b once so each lookup is O(1)
     return a.filter((value) => !inB.has(norm(value))); // keep a's values whose normalized form isn't in b
 }
+
+export function blankToUndefined(value: string | undefined): string | undefined {
+    if (value === undefined) return undefined;
+    const trimmed = value.trim();
+    return trimmed === "" ? undefined : trimmed;
+}

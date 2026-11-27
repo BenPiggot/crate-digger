@@ -186,7 +186,7 @@ export function formatPressingIdentification(
                 `None of the pressings matched the clues provided.\n\n`,
             ];
             for (const match of i.matches) {
-                lines.push(`${describeMatch(match).join(", ")}`);
+                lines.push(`${describeMatch(match).join("\n")}`);
             }
             lines.push(
                 `Double-check the catalog number and runout, or the record may belong to a different master.`,

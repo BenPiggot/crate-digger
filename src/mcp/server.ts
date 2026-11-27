@@ -12,6 +12,7 @@ import {
     formatPressingIdentification,
 } from "./format.js";
 import { safe } from "./clean.js";
+import { blankToUndefined } from "../core/utils/text.js";
 
 export function createServer(): McpServer {
     const server = new McpServer({
@@ -228,7 +229,18 @@ export function createServer(): McpServer {
                 if (target === undefined) {
                     throw new InvalidInputError("Either master_id or release_id must be provided.");
                 }
-                const clues = { format, country, year, label, catno, barcode, runout, details };
+                
+                const clues = {
+                    format: blankToUndefined(format),
+                    country: blankToUndefined(country),
+                    year: blankToUndefined(year),
+                    label: blankToUndefined(label),
+                    catno: blankToUndefined(catno),
+                    barcode: blankToUndefined(barcode),
+                    runout: blankToUndefined(runout),
+                    details: blankToUndefined(details),
+                };
+
                 const data = await digger.identifyPressing(target, clues);
                 return formatPressingIdentification(data, clues);
             },
