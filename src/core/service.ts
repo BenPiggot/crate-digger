@@ -5,6 +5,7 @@ import type { Settings } from "./config.js";
 import {
     DiscogsClient,
     DiscogsError,
+    toRelease,
     toVersion,
     type RawVersion,
     type SearchFilters,
@@ -30,7 +31,8 @@ import type {
     Release,
     ReleaseSearchResult,
 } from "./models.js";
-import { PressingIdentifier, type Candidate, type PressingClues, type PressingMatch } from "./identify.js";
+import { PressingIdentifier, type Candidate, type PressingClues } from "./identify.js";
+import type { PressingMatch } from "./models.js";
 import { prefilter, PressingsIndex } from "./pressings.js";
 import { normalizeCode } from "./utils/text.js";
 // import { PressingsIndex } from "./pressings.js";
@@ -105,14 +107,14 @@ export type FindPressingsForSaleOptions = Partial<SearchFilters> & {
     format?: string | null | undefined;
 };
 
-export interface IdentityPressingResult {
+export interface IdentifyPressingResult {
     master_id: number | null;
     matches: PressingMatch[];
     confident: boolean;
     next_check: string | null;
     total_versions: number;
     /** Versions left after the format, country and year filters. */
-    matching_versions: number;  
+    matching_versions: number;
     /** How many had their stats checked (capped by maxPressingsChecked). */
     checked: number;
     /** Releases requests that failed. */
@@ -333,13 +335,21 @@ export class CrateDigger {
         );
     }
 
-    async identifyPressing(target: PressingTarget, clues: PressingClues) {
+    async identifyPressing(
+        target: PressingTarget,
+        clues: PressingClues,
+    ): Promise<IdentifyPressingResult> {
         const masterId = await this.masterIdFor(target);
         const versions = await this.pressings.versions(masterId);
         const filteredVersions = prefilter(versions, clues);
 
+        const candidateVersions = [...filteredVersions]
+            .sort((a, b) => this.byInCollectionDesc(a, b))
+            .slice(0, this.settings.maxPressingsChecked);
+
         const details: Candidate[] = [];
-        for (const version of filteredVersions) {
+
+        for (const version of candidateVersions) {
             try {
                 details.push({ version, release: await this.pressings.releases(version.id) });
             } catch (e) {
@@ -352,23 +362,23 @@ export class CrateDigger {
         const [first, second] = top;
         const confident = this.identifier.isConfident(top);
 
-
         return {
             master_id: masterId,
             matches: top.map((candidate) => ({
-                release_id: candidate.version.id,
+                release: toRelease(candidate.release),
                 score: candidate.score,
                 matched: candidate.matched,
                 conflicts: candidate.conflicts,
             })),
             confident,
-            next_check: (!confident && first !== undefined && second !== undefined)
-                ? this.identifier.distinguishingCheck(clues, first, second)
-                : null,
+            next_check:
+                !confident && first !== undefined && second !== undefined
+                    ? this.identifier.distinguishingCheck(clues, first, second)
+                    : null,
             total_versions: versions.length,
             matching_versions: filteredVersions.length,
             checked: details.length,
-            releases_failed: versions.length - details.length,
+            releases_failed: filteredVersions.length - details.length,
         };
     }
 

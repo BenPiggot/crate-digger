@@ -16,3 +16,14 @@ export function normalizeText(text: string): string {
         .toLowerCase()
         .replace(/[^\p{L}\p{N}]/gu, ""); // keep letters and digits from any script
 }
+
+/**
+ * Values in `a` that have no match in `b`, after both sides go through `norm`.
+ * One-directional: call it again with the arguments swapped to get what only `b` has.
+ * Returns the original (un-normalized) strings from `a`, so callers can show them as they were written.
+ * missingValues(["SUB BASE-50-A1", "X-1"], ["subbase50a1"], normalizeCode) → ["X-1"]
+ */
+export function missingValues(a: string[], b: string[], norm: (s: string) => string): string[] {
+    const inB = new Set(b.map(norm)); // normalize b once so each lookup is O(1)
+    return a.filter((value) => !inB.has(norm(value))); // keep a's values whose normalized form isn't in b
+}

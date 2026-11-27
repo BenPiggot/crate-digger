@@ -333,6 +333,10 @@ export function toRelease(r: RawRelease): Release {
         .filter((i) => i.type === "Barcode")
         .map((i) => (i.value ?? "").replace(/\D/g, ""))
         .filter(Boolean);
+    const runouts = (r.identifiers ?? [])
+        .filter((i) => i.type === "Matrix / Runout")
+        .map((i) => (i.value ?? "").trim())
+        .filter(Boolean);
     return {
         id: r.id,
         title: r.title ?? "",
@@ -344,6 +348,7 @@ export function toRelease(r: RawRelease): Release {
         formats,
         format_description: r.format ?? null,
         barcodes: [...new Set(barcodes)],
+        runouts: [...new Set(runouts)],
         thumb: r.thumb ?? null,
         url: r.uri ?? null,
         master_id: r.master_id ?? null,
@@ -362,6 +367,7 @@ export function toVersion(r: RawVersion): Release {
         formats: r.major_formats ?? [],
         format_description: r.format ?? null,
         barcodes: [],
+        runouts: [],
         thumb: r.thumb ?? null,
         url: r.resource_url ?? null,
         master_id: null,

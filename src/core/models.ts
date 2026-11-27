@@ -18,6 +18,7 @@ export interface Release {
     formats: string[];
     format_description: string | null;
     barcodes: string[];
+    runouts: string[];
     thumb: string | null;
     url: string | null;
     master_id: number | null;
@@ -51,6 +52,13 @@ export interface PressingForSale {
     in_collection: number | null;
     /** Discogs marketplace page listing every copy of this pressing for sale. */
     sell_url: string;
+}
+
+export interface PressingMatch {
+    release: Release; // label, catno, country, year, formats, url
+    score: number;
+    matched: string[];
+    conflicts: string[];
 }
 
 /** One copy of a record for sale, from any listing source. */

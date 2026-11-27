@@ -1,5 +1,5 @@
 import { type RawVersion, type RawRelease, toRelease } from "./discogs.js";
-import { normalizeCode, digitsOnly, normalizeText } from "./utils/text.js";
+import { normalizeCode, digitsOnly, normalizeText, missingValues } from "./utils/text.js";
 
 export interface PressingClues {
     // hard fact clues: safe to use for exclusion
@@ -27,13 +27,6 @@ export interface Candidate {
     release: RawRelease;
 }
 
-export interface PressingMatch {
-    release_id: number;
-    score: number;
-    matched: string[];
-    conflicts: string[];
-}
-
 export interface RankedCandidate extends Candidate {
     score: number;
     // clues that matched this candidate
@@ -48,7 +41,7 @@ export class PressingIdentifier {
     private readonly runoutThreshold: number;
     private readonly confidenceMargin: number;
 
-    constructor(options: IdentifyOptions = { }) {
+    constructor(options: IdentifyOptions = {}) {
         this.weights = {
             catno: 3,
             barcode: 5,
@@ -66,39 +59,56 @@ export class PressingIdentifier {
             .sort((a, b) => b.score - a.score);
     }
 
-    distinguishingCheck(clues: PressingClues, first: RankedCandidate, second: RankedCandidate): string | null {
-        if (clues.runout) {
-            const firstRunout = this.getIdentifiers(first.release, "Runout").join(" ");
-            const secondRunout = this.getIdentifiers(second.release, "Runout").join(" ");
-            if (firstRunout !== secondRunout) {
-                return "Compare the runout groove on the record with the Discogs runout data.";
-            }
-        } 
-        if (clues.catno) {
-            const firstCatno = (first.release.labels ?? [])
-                .map((label) => label.catno ?? "")
-                .join(" ");
-            const secondCatno = (second.release.labels ?? [])
-                .map((label) => label.catno ?? "")
-                .join(" ");
-            if (firstCatno !== secondCatno) {
-                return "Compare the catalog number on the record with the Discogs catalog number data.";
-            }
-        }   
-        
-        if (clues.barcode) {
-            const firstBarcode = this.getIdentifiers(first.release, "Barcode").join(" ");
-            const secondBarcode = this.getIdentifiers(second.release, "Barcode").join(" ");
-            if (firstBarcode !== secondBarcode) {
-                return "Compare the barcode on the record with the Discogs barcode data.";
+    distinguishingCheck(
+        clues: PressingClues,
+        first: RankedCandidate,
+        second: RankedCandidate,
+    ): string | null {
+        if (clues.runout === undefined) {
+            const firstRunout = this.getIdentifiers(first.release, "Matrix / Runout");
+            const secondRunout = this.getIdentifiers(second.release, "Matrix / Runout");
+            const onlyA = missingValues(firstRunout, secondRunout, normalizeCode);
+            const onlyB = missingValues(secondRunout, firstRunout, normalizeCode);
+            if (onlyA.length > 0 && onlyB.length > 0) {
+                return `Which is etched on the runout (the smooth area between the grooves and the label): ${onlyA[0]} or ${onlyB[0]}?`;
             }
         }
- 
-        if (clues.details) {
-            const firstDetails = normalizeText([...toRelease(first.release).formats, first.release.notes ?? ""].join(" "));
-            const secondDetails = normalizeText([...toRelease(second.release).formats, second.release.notes ?? ""].join(" "));
-            if (firstDetails !== secondDetails) {
-                return "Compare the details on the record with the Discogs details data.";
+        if (clues.catno === undefined) {
+            const firstCatno = (first.release.labels ?? [])
+                .map((label) => label.catno ?? "")
+                .filter((c) => c !== "" && c.toLowerCase() !== "none");
+            const secondCatno = (second.release.labels ?? [])
+                .map((label) => label.catno ?? "")
+                .filter((c) => c !== "" && c.toLowerCase() !== "none");
+            const onlyA = missingValues(firstCatno, secondCatno, normalizeCode);
+            const onlyB = missingValues(secondCatno, firstCatno, normalizeCode);
+            if (onlyA.length > 0 && onlyB.length > 0) {
+                return `Which catalog number is printed on the record: ${onlyA[0]} or ${onlyB[0]}?`;
+            }
+        }
+
+        if (clues.barcode === undefined) {
+            const firstBarcode = this.getIdentifiers(first.release, "Barcode");
+            const secondBarcode = this.getIdentifiers(second.release, "Barcode");
+            const onlyA = missingValues(firstBarcode, secondBarcode, digitsOnly);
+            const onlyB = missingValues(secondBarcode, firstBarcode, digitsOnly);
+            if (onlyA.length > 0 && onlyB.length > 0) {
+                return `Which barcode is on the sleeve: ${onlyA[0]} or ${onlyB[0]}?`;
+            }
+        }
+
+        if (clues.details === undefined) {
+            const firstDesc = toRelease(first.release).formats.flatMap((format) =>
+                format.split(", "),
+            );
+            const secondDesc = toRelease(second.release).formats.flatMap((format) =>
+                format.split(", "),
+            );
+            const extra =
+                firstDesc.find((desc) => !secondDesc.includes(desc)) ??
+                secondDesc.find((desc) => !firstDesc.includes(desc));
+            if (extra !== undefined) {
+                return `Is your copy described as: ${extra}? One of the two pressings is; the other is not.`;
             }
         }
 
@@ -156,7 +166,10 @@ export class PressingIdentifier {
         );
 
         const descriptions = normalizeText([...r.formats, c.release.notes ?? ""].join(" "));
-        if (clues.details !== undefined && descriptions.includes(normalizeText(clues.details ?? ""))) {
+        if (
+            clues.details !== undefined &&
+            descriptions.includes(normalizeText(clues.details ?? ""))
+        ) {
             result.score += this.weights.details;
             result.matched.push(`'${clues.details}' appears in format description`);
         }

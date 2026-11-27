@@ -1,6 +1,13 @@
+import type { PressingClues } from "../core/identify.js";
 import type { SellerScanSummary } from "../core/listing-source.js";
-import type { Copy, MarketStats, Release, ReleaseSearchResult } from "../core/models.js";
-import type { FindPressingsForSaleResult } from "../core/service.js";
+import type {
+    Copy,
+    MarketStats,
+    PressingMatch,
+    Release,
+    ReleaseSearchResult,
+} from "../core/models.js";
+import type { FindPressingsForSaleResult, IdentifyPressingResult } from "../core/service.js";
 
 export function formatReleases(releases: ReleaseSearchResult[]): string {
     if (releases.length === 0) {
@@ -158,18 +165,108 @@ export function formatPressingsForSale(pressingsResult: FindPressingsForSaleResu
     return `${summary.join("\n")}\n\n${lines.join("\n\n")}`;
 }
 
-// export function formatPressingIdentification(identification: PressingIdentification | null): string {
-//     if (!identification) {
-//         return "Pressing not found.";
-//     }
+export function formatPressingIdentification(
+    identification: IdentifyPressingResult,
+    clues: PressingClues,
+): string {
+    const i = identification;
 
-//     return [
-//         `Release ID: ${identification.release.id}`,
-//         `Title: ${identification.release.title}`,
-//         `Artist: ${identification.release.artist ?? "?"}`,
-//         `Format: ${[...identification.release.formats, identification.release.format_description].filter(Boolean).join(", ")}`,
-//         `Country: ${identification.release.country ?? "?"} | Year: ${identification.release.year ?? "?"}`,
-//         `Label: ${identification.release.label ?? "?"} | Catno: ${identification.release.catno ?? "?"}`,
-//         `Link: ${identification.sell_url}`,
-//     ].join("\n");
-// }
+    if (i.matching_versions === 0) {
+        return formatNoMatchResponse(clues);
+    }
+
+    if (i?.matches[0] && i.matches[0].score <= 0) {
+        const hasRankingClues = [clues.catno, clues.barcode, clues.runout, clues.details].some(
+            (c) => c !== undefined,
+        );
+        if (hasRankingClues) {
+            return formatNoMatchResponse(clues);
+        } else {
+            const lines = [
+                `None of the pressings matched the clues provided.\n\n`,
+            ];
+            for (const match of i.matches) {
+                lines.push(`${describeMatch(match).join(", ")}`);
+            }
+            lines.push(
+                `Double-check the catalog number and runout, or the record may belong to a different master.`,
+            );
+            return lines.join("\n");
+        }
+    }
+
+    const summary = `Master ${i.master_id}: ${i.total_versions} versions, ${i.matching_versions} after filters, ${i.checked} checked.`;
+
+    if (i.confident) {
+        const r = i.matches[0]?.release;
+        const conflicts = i.matches[0]?.conflicts ?? [];
+        const matched = i.matches[0]?.matched ?? [];
+        const lines = [
+            summary,
+            `Most likely: ${r?.id ?? ""} (clear match)\n`,
+            describeMatch(i.matches[0]!).join("\n"),
+        ];
+        if (matched.length > 0) lines.push(`  Matched: ${matched.join("; ")}`);
+        if (conflicts.length > 0) lines.push(`  Conflicts: ${conflicts.join("; ")}`);
+        lines.push(r?.url ?? "");
+
+        if (i.matches.length > 1) {
+            const runnerUp = i.matches[1]?.release;
+            lines.push(
+                `Runner-up: ${runnerUp?.id ?? ""}, ${runnerUp?.label ?? "?"} ${runnerUp?.catno ?? "?"} (${runnerUp?.country ?? "?"} ${runnerUp?.year ?? "?"}), [score: ${i.matches[1]?.score ?? "?"} vs ${i.matches[0]?.score ?? "?"}]`,
+            );
+        }
+        return lines.join("\n");
+    }
+
+    if (!i.confident && i.next_check) {
+        const lines = [summary, `Not sure yet. Two pressings are close matches.`];
+
+        lines.push(`1: ${describeMatch(i.matches[0]!).join("\n")}`);
+        lines.push(`2: ${describeMatch(i.matches[1]!).join("\n")}`);
+
+        lines.push(`Next check: ${i.next_check ?? "?"}`);
+        return lines.join("\n");
+    }
+
+    const lines = [
+        `Discogs' data doesn't show a difference between the candidates that you could check on the record.`,
+        `Compare your copy with the photos on each Discogs page\n\n`,
+        `Top Candidates:`,
+    ];
+
+    lines.push(`1: ${describeMatch(i.matches[0]!).join("\n")}`);
+    lines.push(`2: ${describeMatch(i.matches[1]!).join("\n")}`);
+    return lines.join("\n");
+}
+
+function formatNoMatchResponse(clues: PressingClues, i?: IdentifyPressingResult): string {
+    const parts = [
+        clues.format ?? "vinyl", // the prefilter's default
+        clues.country === undefined ? null : `from ${clues.country}`,
+        clues.year === undefined ? null : `in ${clues.year}`,
+    ].filter((p) => p !== null);
+
+    const loosen = [
+        clues.country === undefined ? null : "country",
+        clues.year === undefined ? null : "year",
+    ].filter((p) => p !== null);
+
+    return [
+        `None of the ${i?.matching_versions} pressings found for ${parts.join(" ")} .`,
+        loosen.length > 0 ? `Try without the ${loosen.join(" or ")}.` : "",
+    ]
+        .filter(Boolean)
+        .join("\n");
+}
+
+function describeMatch(m: PressingMatch): string[] {
+    const r = m.release;
+    return [
+        `${r.id}: ${r.label ?? "?"} ${r.catno ?? "?"} (${r.country ?? "?"}, ${r.year ?? "?"}), ${r.formats.join(", ")}`,
+        ...(m.matched.length > 0 ? [`  Matched: ${m.matched.join("; ")}`] : []),
+        ...(m.conflicts.length > 0 ? [`  Conflicts: ${m.conflicts.join("; ")}`] : []),
+        ...(r.runouts.length > 0 ? [`  Runouts: ${r.runouts.join(", ")}`] : []),
+        ...(r.url !== null ? [`  ${r.url}`] : []),
+    ];
+}
