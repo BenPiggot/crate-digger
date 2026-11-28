@@ -1,5 +1,9 @@
 import { type RawVersion, type RawRelease, toRelease } from "./discogs.js";
-import { normalizeCode, digitsOnly, normalizeText, missingValues } from "./utils/text.js";
+import { 
+    normalizeCode, digitsOnly, 
+    normalizeText, missingValues,
+    runoutWords, hasAllWords,
+} from "./utils/text.js";
 
 export interface PressingClues {
     // hard fact clues: safe to use for exclusion
@@ -67,10 +71,22 @@ export class PressingIdentifier {
         if (clues.runout === undefined) {
             const firstRunout = this.getIdentifiers(first.release, "Matrix / Runout");
             const secondRunout = this.getIdentifiers(second.release, "Matrix / Runout");
-            const onlyA = missingValues(firstRunout, secondRunout, normalizeCode);
-            const onlyB = missingValues(secondRunout, firstRunout, normalizeCode);
-            if (onlyA.length > 0 && onlyB.length > 0) {
-                return `Which is etched on the runout (the smooth area between the grooves and the label): ${onlyA[0]} or ${onlyB[0]}?`;
+            if (firstRunout.length > 0 && secondRunout.length > 0) {
+                const wordsFirst = runoutWords(firstRunout.join(" "));
+                const wordsSecond = runoutWords(secondRunout.join(" "));
+                const onlyFirst = [...wordsFirst].filter((w) => !wordsSecond.has(w));
+                const onlySecond = [...wordsSecond].filter((w) => !wordsFirst.has(w));
+                const printRunout = (release: RawRelease) => toRelease(release).runouts.join(" ");
+
+                if (onlyFirst.length > 0 && onlySecond.length === 0) {
+                    return `Is '${printRunout(first.release)}' etched in the runout, or only '${printRunout(second.release)}'?`;
+                }
+                if (onlySecond.length > 0 && onlyFirst.length === 0) {
+                    return `Is '${printRunout(second.release)}' etched in the runout, or only '${printRunout(first.release)}'?`;
+                }
+                if (onlyFirst.length > 0 && onlySecond.length > 0) {
+                    return `Which is etched in the runout: '${printRunout(first.release)}' or '${printRunout(second.release)}'?`;
+                }
             }
         }
         if (clues.catno === undefined) {
@@ -157,13 +173,18 @@ export class PressingIdentifier {
             this.weights.barcode,
             digitsOnly,
         );
-        check(
-            "runout",
-            clues.runout,
-            this.getIdentifiers(c.release, "Matrix / Runout"),
-            this.weights.runout,
-            normalizeCode,
-        );
+
+        const runouts = this.getIdentifiers(c.release, "Matrix / Runout");
+        if (clues.runout !== undefined && runouts.length > 0) {
+            const clue = normalizeCode(clues.runout);
+            if (runouts.some((r) => hasAllWords(r, clue))){
+                result.score += this.weights.runout;
+                result.matched.push(`runout '${clues.runout}' matches`);
+            } else {
+                result.score -= this.weights.runout;
+                result.conflicts.push(`runout '${clues.runout}' doesn't match`);
+            }
+        }
 
         const descriptions = normalizeText([...r.formats, c.release.notes ?? ""].join(" "));
         if (

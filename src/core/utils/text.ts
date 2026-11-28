@@ -33,3 +33,15 @@ export function blankToUndefined(value: string | undefined): string | undefined 
     const trimmed = value.trim();
     return trimmed === "" ? undefined : trimmed;
 }
+
+/** The words of a runout etching, normalized: "SUB BASE-50-A1 CBA" → {sub, base, 50, a1, cba} */
+export function runoutWords(text: string): Set<string> {
+    return new Set(text.split(/[\s-]+/).map(normalizeCode).filter((w) => w !== ""));
+}
+
+/** True if every word of `inner` appears in `outer`. */
+export function hasAllWords(outer: string, inner: string): boolean {
+    const outerWords = runoutWords(outer);
+    return [...runoutWords(inner)].every((w) => outerWords.has(w));
+}
+
